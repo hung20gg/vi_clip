@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 from .lossfn import sigliploss, cliploss
-from transformers import AutoTokenizer, AutoModel, AutoProcessor
+from transformers import AutoTokenizer, AutoModel, AutoProcessor, CLIPImageProcessor
 import timm
-from .utils import mean_pooling, count_parameters
+from .utils import mean_pooling, count_parameters, CLIPImage, CLIPText
+import gc
 
 
 class CLIP(nn.Module):
@@ -12,6 +13,7 @@ class CLIP(nn.Module):
                  text_model = 'vinai/phobert-base-v2', 
                  vision_source = 'timm',
                  pretrain = True,
+                 projection_dim = 768,
                  device = None):
         super(CLIP, self).__init__()
 
@@ -35,8 +37,14 @@ class CLIP(nn.Module):
             self.data_config = timm.data.resolve_data_config({}, model=self.vision_model)
             self.processor = timm.data.create_transform(**self.data_config, is_training=False)
         else:
-            self.vision_model = AutoModel.from_pretrained(vision_model)
-            self.processor = AutoProcessor.from_pretrained(vision_model)
+            model = AutoModel.from_pretrained(vision_model)
+            self.vision_model = CLIPImage(model, projection_dim)
+            self.processor = CLIPImageProcessor.from_pretrained(vision_model)
+            
+            del model
+            gc.collect()
+            if self.device == 'cuda':
+                torch.cuda.empty_cache()
         
         print(f'Number of vision model parameters: {count_parameters(self.vision_model)}')
         
@@ -58,7 +66,10 @@ class CLIP(nn.Module):
     def transform_image(self, image):
         if isinstance(image, torch.Tensor):
             return image
-        return self.processor(image)
+        result = self.processor(image, return_tensors='pt')
+        if isinstance(result, dict):
+            return result['pixel_values']
+        return result
         
     def encode_image(self, image, train = False):
         image = self.transform_image(image).to(self.device)

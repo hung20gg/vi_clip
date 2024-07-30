@@ -1,33 +1,13 @@
 import torch
 import torch.nn as nn
-from transformers import AutoTokenizer,  CLIPTextModel, AutoProcessor, CLIPVisionModel, AutoModel,CLIPModel
-from .utils import mean_pooling, count_parameters
+from transformers import AutoTokenizer,  AutoProcessor, AutoModel, CLIPModel, SiglipModel
+from .utils import mean_pooling, count_parameters, CLIPImage, CLIPText
 from .lossfn import sigliploss, cliploss
 
 import gc
 
 
-class CLIPText(nn.Module):
-    def __init__(self, model):
-        super(CLIPText, self).__init__()
-        layers = [model.text_model]
-        if hasattr(model, 'text_projection'):
-            layers.append(model.text_projection)
-        self.text = nn.ModuleList(layers)
-        
-    def forward(self, x):
-        return self.text(x)
-    
-class CLIPImage(nn.Module):
-    def __init__(self, model):
-        super(CLIPImage, self).__init__()
-        layers = [model.visual_model]
-        if hasattr(model, 'visual_projection'):
-            layers.append(model.visual_projection)
-        self.image = nn.ModuleList(layers)
-        
-    def forward(self, x):
-        return self.image(x)
+
 
 class CrossLingual(nn.Module):
     def __init__(self,
@@ -48,14 +28,13 @@ class CrossLingual(nn.Module):
         
         print('Loading CLIP/SigLIP model')
         self.vision = load_vision
-        model = CLIPModel.from_pretrained(clip_model).to(self.device)
+        model = AutoModel.from_pretrained(clip_model).to(self.device)
+        self.processor = AutoProcessor.from_pretrained(clip_model, is_training=False)
         if load_vision:
-            self.vision_model = CLIPImage(model)
-            self.processor = AutoProcessor.from_pretrained(clip_model, is_training=False)
+            self.vision_model = CLIPImage(model)  
             print(f'Number of vision model parameters: {count_parameters(self.vision_model)}')
         
         self.clip_text_model = CLIPText(model)
-        self.clip_tokenizer = AutoTokenizer.from_pretrained(clip_model, use_fast=True)
         
         del model
         gc.collect()
@@ -86,22 +65,21 @@ class CrossLingual(nn.Module):
         
         if isinstance(image, torch.Tensor):
             return image
-        return self.processor(image)
+        return self.processor(images = image, return_tensors="pt")
 
         
     def encode_image(self, image, train = False):
         assert self.vision, 'Vision model is not loaded'
         
         image = self.transform_image(image).to(self.device)
-        if len(image.shape) == 3:
-            image = image.unsqueeze(0)
+        
         if self.train_vision or train:
             self.vision_model.train()
-            output = self.vision_model(image)
+            output = self.vision_model(**image)
         else:
             self.vision_model.eval()
             with torch.no_grad():
-                output = self.vision_model(image)
+                output = self.vision_model(**image)
 
         emb_norm = torch.norm(output, dim=1, keepdim=True)
         return output / (emb_norm + 1e-8)
@@ -129,7 +107,7 @@ class CrossLingual(nn.Module):
         return emb_text / (emb_norm + 1e-8)
     
     def encode_clip_text(self, text, train = False):
-        inputs = self.clip_tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        inputs = self.processor(text=text, padding=True, truncation=True, return_tensors='pt').to(self.device)
         
         if self.train_clip_text or train:
             self.clip_text_model.train()
@@ -152,13 +130,25 @@ class CrossLingual(nn.Module):
     
 class mCLIP(CrossLingual):
     def __init__(self,
-                 clip_model = 'laion/CLIP-ViT-B-16-laion2B-s34B-b88K',
+                 clip_model = 'google/siglip-base-patch16-224',
                  text_model = 'vinai/phobert-base-v2',
                  load_vision = True,
                  device = None,
-                 lambda_ = 0.1):
+                 lambda_ = 0.1,
+                 init_scale = 10,
+                 init_bias = -10):
         super(mCLIP, self).__init__(clip_model, text_model, load_vision, device)
-        self.loss_fn = cliploss
+        
+        self.siglip = 'siglip' in clip_model.lower()
+        if self.siglip:
+            self._loss_fn = sigliploss
+            self.logit_scale_tt = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
+            self.logit_bias_tt  = nn.Parameter(torch.ones(1) * init_bias)
+            
+            self.logit_scale_it = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
+            self.logit_bias_it  = nn.Parameter(torch.ones(1) * init_bias)
+        else:
+            self._loss_fn = cliploss
         self.lambda_ = lambda_
         
     def setup_training(self, train_vision=True, train_clip_text=False, train_text=True):
@@ -166,14 +156,18 @@ class mCLIP(CrossLingual):
         self.train_clip_text = train_clip_text
         self.train_text = train_text
         
-    def forward(self, y_pred, y_true):
+    def forward(self, image, text_1, text_2):
         
-        image_embed = self.encode_image(y_pred)
-        text_embed_clip = self.encode_clip_text(y_true)
-        text_embed = self.encode_text(y_true)
+        image_embed = self.encode_image(image)
+        text_embed_clip = self.encode_clip_text(text_2)
+        text_embed = self.encode_text(text_1)
         
-        TTloss = self.loss_fn(text_embed, text_embed_clip)
-        ITloss = self.loss_fn(image_embed, text_embed)
+        if self.siglip:
+            TTloss = self._loss_fn(image_embed, text_embed_clip, self.logit_scale_tt, self.logit_bias_tt)
+            ITloss = self._loss_fn(image_embed, text_embed, self.logit_scale_it, self.logit_bias_it)
+        else:
+            TTloss = self._loss_fn(text_embed, text_embed_clip)
+            ITloss = self._loss_fn(image_embed, text_embed)
         
         return ITloss + self.lambda_ * TTloss # Need verification
         
