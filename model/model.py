@@ -28,6 +28,7 @@ class CLIP(nn.Module):
         print(f"Using device: {self.device}")
         
         print('Loading vision model')
+        self.vision_source = vision_source
         if vision_source == 'timm':
             self.vision_model = timm.create_model(
                 vision_model,
@@ -55,6 +56,8 @@ class CLIP(nn.Module):
         self.text_model = AutoModel.from_pretrained(text_model)
         self.tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
         print(f'Number of text model parameters: {count_parameters(self.text_model)}')
+        
+        self.to(self.device)
     
     def setup_training(self, train_vision = True, train_text = True):
         self.train_vision = train_vision
@@ -65,23 +68,33 @@ class CLIP(nn.Module):
         
     def transform_image(self, image):
         if isinstance(image, torch.Tensor):
-            return image
-        result = self.processor(image, return_tensors='pt')
-        if isinstance(result, dict):
-            return result['pixel_values']
-        return result
+            return image.to(self.device)
+        if self.vision_source == 'timm':
+            return self.processor(image).to(self.device)
+        return self.processor(image, return_tensors='pt').to(self.device)
+
         
     def encode_image(self, image, train = False):
         image = self.transform_image(image).to(self.device)
-        if len(image.shape) == 3:
-            image = image.unsqueeze(0)
-        if self.train_vision or train:
-            self.vision_model.train()
-            output = self.vision_model(image)
-        else:
-            self.vision_model.eval()
-            with torch.no_grad():
+        if self.vision_source == 'timm':
+            if len(image.shape) == 3:
+                image = image.unsqueeze(0)
+            if self.train_vision or train:
+                self.vision_model.train()
                 output = self.vision_model(image)
+            else:
+                self.vision_model.eval()
+                with torch.no_grad():
+                    output = self.vision_model(image)
+        
+        else:
+            if self.train_vision or train:
+                self.vision_model.train()
+                output = self.vision_model(**image)
+            else:
+                self.vision_model.eval()
+                with torch.no_grad():
+                    output = self.vision_model(**image)
 
         emb_norm = torch.norm(output, dim=1, keepdim=True)
         return output / (emb_norm + 1e-8)

@@ -4,24 +4,20 @@ import pandas as pd
 from tqdm import tqdm
 from ..model import build_model
 
-def get_dataset(name):
-    if name == 'mscoco_vi':
-        df = pd.read_csv('data/evaluate/mscoco_vi.csv')
-    elif name == 'imagenet1k_vi':
-        df = pd.read_csv('data/evaluate/imagenet1k_vi.csv')
-    elif name == 'imagenet21k_vi':
-        df = pd.read_csv('data/evaluate/imagenet21k_vi.csv')
-    else:
-        raise ValueError('Dataset not found')
+def get_dataset(name, directory = 'data/evaluate'):
     
-    df['image_id'] = None 
-    df['text_id'] = None
+    # Get 3 different datasets: image_text, image_text_id, image_id_text
+    image_text = pd.read_parquet(f'{directory}/{name}/image_text.parquet')
+    text_df = pd.read_parquet(f'{directory}/{name}/text.parquet')
+    image_df = pd.read_parquet(f'{directory}/{name}/image.parquet')
     
+    text_df.sort_values('text_id', inplace=True)
+    image_df.sort_values('image_id', inplace=True)
+
     return {
-        'images': df['image_path'].values,
-        'texts': df['label'].values,
-        'image_id': df['image_id'].values,
-        'text_id': df['text_id'].values
+        'images': image_df,
+        'texts': text_df,
+        'image_text': image_text,
     }
 
 def get_top_matches(image_embeddings, text_embeddings, top_k = 5):
@@ -54,7 +50,7 @@ def get_top_matches(image_embeddings, text_embeddings, top_k = 5):
     
     return img_text_scores, text_img_scores
     
-class EvaluateRAG:
+class Evaluate:
     def __init__(self, model_args, eval_args, device = None):
         
         if device is not None:
@@ -95,8 +91,8 @@ class EvaluateRAG:
         return image_embeddings
     
     def _evaluate(self, top_k = 5):
-        image_embeddings = self._encode_image(self.dataset['images'])
-        text_embeddings = self._encode_text(self.dataset['texts'])
+        image_embeddings = self._encode_image(self.dataset['images']['image'].values)
+        text_embeddings = self._encode_text(self.dataset['texts']['text'].values)
         
         img_text_scores, text_img_scores = get_top_matches(image_embeddings, text_embeddings, top_k)
         return img_text_scores, text_img_scores
@@ -107,9 +103,9 @@ class EvaluateRAG:
     
     def get_relevant_items(self, id, id_type):
         if id_type == 'text':
-            return set(self.dataset['image_id'][self.dataset['text_id'] == id])
+            return set(self.dataset['image_text'][self.dataset['image_text']['text_id'] == id])
         else:  # image
-            return set(self.dataset['text_id'][self.dataset['image_id'] == id])
+            return set(self.dataset['image_text'][self.dataset['image_text']['image_id'] == id])
     
     def retrieval(self, top_k = 5):
         img_text, text_img = self._evaluate()
@@ -119,8 +115,8 @@ class EvaluateRAG:
         img_text_recall_1 = 0
         img_text_recall_k = 0
         
-        len_text = len(self.dataset['text_id'].unique())
-        len_img = len(self.dataset['image_id'].unique())
+        len_text = len(self.dataset['texts'])
+        len_img = len(self.dataset['images'])
         
         for i in range(len_text):
             relevant_images = self.get_relevant_items(i, 'text')

@@ -28,7 +28,14 @@ class CrossLingual(nn.Module):
         
         print('Loading CLIP/SigLIP model')
         self.vision = load_vision
+        
         model = AutoModel.from_pretrained(clip_model).to(self.device)
+        
+        if hasattr(model, 'projection_dim'):
+            self.projection_dim = model.projection_dim
+        else:
+            self.projection_dim = 768
+            
         self.processor = AutoProcessor.from_pretrained(clip_model, is_training=False)
         if load_vision:
             self.vision_model = CLIPImage(model)  
@@ -42,6 +49,10 @@ class CrossLingual(nn.Module):
             torch.cuda.empty_cache()
         
         self.text_model = AutoModel.from_pretrained(text_model).to(self.device)
+        if self.projection_dim != self.text_model.config.hidden_size:
+            self.text_projection = nn.Linear(self.text_model.config.hidden_size, self.projection_dim)
+        else:
+            self.text_projection = nn.Identity()
         self.tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
         print(f'Number of text model parameters: {count_parameters(self.text_model)}')
         
@@ -64,8 +75,8 @@ class CrossLingual(nn.Module):
         assert self.vision, 'Vision model is not loaded'
         
         if isinstance(image, torch.Tensor):
-            return image
-        return self.processor(images = image, return_tensors="pt")
+            return image.to(self.device)
+        return self.processor(images = image, return_tensors="pt").to(self.device)
 
         
     def encode_image(self, image, train = False):
@@ -95,6 +106,7 @@ class CrossLingual(nn.Module):
             self.text_model.eval()
             with torch.no_grad():
                 outputs = self.text_model(**inputs).last_hidden_state
+            
                 
         if result == 'eos':
             emb_text = outputs
@@ -103,6 +115,7 @@ class CrossLingual(nn.Module):
         else:
             emb_text = mean_pooling(outputs, inputs['attention_mask'])
         
+        emb_text = self.text_projection(emb_text)
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)
     
@@ -111,12 +124,12 @@ class CrossLingual(nn.Module):
         
         if self.train_clip_text or train:
             self.clip_text_model.train()
-            outputs = self.clip_text_model(**inputs).last_hidden_state
+            outputs = self.clip_text_model(**inputs)
         else:
             self.clip_text_model.eval()
             with torch.no_grad():
-                outputs = self.clip_text_model(**inputs).last_hidden_state
-        
+                outputs = self.clip_text_model(**inputs)
+                
         emb_norm = torch.norm(outputs, dim=1, keepdim=True)
         return outputs / (emb_norm + 1e-8)
         

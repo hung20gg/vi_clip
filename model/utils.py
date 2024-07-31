@@ -12,26 +12,31 @@ def count_parameters(model):
 class CLIPText(nn.Module):
     def __init__(self, model):
         super(CLIPText, self).__init__()
-        layers = [model.text_model]
-        if hasattr(model, 'text_projection'):
-            layers.append(model.text_projection)
+        self.text_model = model.text_model
 
-        self.text = nn.ModuleList(layers)
-        
-    def forward(self, x):
-        return self.text(x)
+        if hasattr(model, 'text_projection'):
+            self.text_projection = model.text_projection
+        else:
+            self.text_projection = nn.Identity()
+
+    def forward(self, **x):
+        text_outputs = self.text_model(**x)[1]
+        return self.text_projection(text_outputs)
     
 class CLIPImage(nn.Module):
-    def __init__(self, model, projection_dim = 768):
+    def __init__(self, model):
         super(CLIPImage, self).__init__()
-        layers = [model.vision_model]
-        if hasattr(model, 'vision_projection') and model.projection_dim == projection_dim:
-            layers.append(model.vision_projection)
-        self.image = nn.ModuleList(layers)
+        self.vision_model = model.vision_model
         
-    def forward(self, x):
-        return self.image(x)
-
+        if hasattr(model, 'visual_projection'):
+            self.visual_projection = model.visual_projection
+        else:
+            self.visual_projection = nn.Identity()
+        
+    def forward(self, **x):
+        vision_outputs = self.vision_model(**x)[1]
+        return self.visual_projection(vision_outputs)
+    
 if __name__ == '__main__':
     x = torch.randn(3, 7, 768)
     y = mean_pooling(x, torch.ones(3, 7))
