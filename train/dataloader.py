@@ -3,6 +3,7 @@ import torch
 import os
 from torchvision.io import read_image
 import numpy as np
+from PIL import Image
 
 class ImageCaptionDataset(Dataset):
     def __init__(self, df, directory = ''):
@@ -25,9 +26,49 @@ class ImageCaptionDataset(Dataset):
 
     def __getitem__(self, idx):
         img_dir = self.imgs[idx]
-        img = read_image(os.path.join(self.directory, img_dir))
+        img = Image.open(os.path.join(self.directory, img_dir))
         label = self.descriptions[idx]
         return img, label
+    
+class CrossLingualDataset(Dataset):
+    def __init__(self, df ):
+        """_summary_
+
+        Args:
+            df (_type_): DataFrame of the dataset
+            directory (_type_): _description_
+        """
+        
+        self.original_text = df['text'].values
+        self.translated_text = df['translated_text'].values
+
+    def __len__(self):
+        return len(self.original_text)
+    
+    def __getitem__(self, idx):
+        return self.original_text[idx], self.translated_text[idx]
+    
+class mCLIPDataset(Dataset):
+    def __init__(self, df ):
+        """_summary_
+
+        Args:
+            df (_type_): DataFrame of the dataset
+            directory (_type_): _description_
+        """
+        
+        self.images_id = df['image_id'].values
+        self.original_text = df['text'].values
+        self.translated_text = df['translated_text'].values
+        assert len(self.original_text) == len(self.translated_text), "Original and translated text must have the same length"
+
+    def __len__(self):
+        return len(self.original_text)
+    
+    def __getitem__(self, idx):
+        img_dir = self.imgs[idx]
+        img = Image.open(os.path.join(self.directory, img_dir))
+        return img, self.original_text[idx], self.translated_text[idx]
     
 class CLIPSampler(BatchSampler):
     """_summary_

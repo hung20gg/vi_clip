@@ -2,17 +2,23 @@ import torch
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from PIL import Image
 from ..model import build_model
 
 def get_dataset(name, directory = 'data/evaluate'):
     
     # Get 3 different datasets: image_text, image_text_id, image_id_text
     image_text = pd.read_parquet(f'{directory}/{name}/image_text.parquet')
-    text_df = pd.read_parquet(f'{directory}/{name}/text.parquet')
-    image_df = pd.read_parquet(f'{directory}/{name}/image.parquet')
+    image_text['image_id'] = pd.factorize(image_text['image'])[0]
+    image_text['text_id'] = pd.factorize(image_text['text'])[0]
+    
+    text_df = image_text[['text_id', 'text']].drop_duplicates()
+    image_df = image_text[['image_id', 'image']].drop_duplicates()
     
     text_df.sort_values('text_id', inplace=True)
     image_df.sort_values('image_id', inplace=True)
+
+    image_df['image'] = image_df['image'].apply(lambda x: f'{directory}/{name}/images/{x}')
 
     return {
         'images': image_df,
@@ -80,9 +86,14 @@ class Evaluate:
                 text_embeddings = np.concatenate([text_embeddings, text_batch], axis=0)
         return text_embeddings
     
+    @staticmethod
+    def open_image(image_path):
+        return Image.open(image_path)
+    
     def _encode_image(self, images):
         for i in range(0, len(images), self.eval_args['batch_size']):
             image_batch = images[i:i+self.eval_args['batch_size']]
+            image_batch = [self.open_image(image) for image in image_batch]
             image_batch = self.model.encode_image(image_batch)
             if i == 0:
                 image_embeddings = image_batch
@@ -99,7 +110,17 @@ class Evaluate:
         # Calculate Acc@K k = 1, 5
         
     def zero_shot_classification(self):
-        return 0
+        img_text_scores, text_img_scores = self._evaluate(top_k=1)
+        image_text = self.dataset['image_text'].sort_values('image_id')
+        
+        check_order = np.arange(len(image_text))
+        
+        assert np.all(check_order == image_text['image_id'].values), 'Image order is not correct'
+        labels = image_text['text_id'].values
+        preds = img_text_scores[:,0] 
+        return np.mean(labels == preds)
+        
+        
     
     def get_relevant_items(self, id, id_type):
         if id_type == 'text':

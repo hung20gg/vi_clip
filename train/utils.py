@@ -1,6 +1,6 @@
-from ..model.model import CLIP, SigLIP, LiT, SigLiT
-from torch.utils.data import DataLoader, Dataset
-from .dataloader import ImageCaptionDataset, CLIPSampler
+from ..model import CLIP, SigLIP, LiT, SigLiT
+from torch.utils.data import DataLoader
+from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset
 
 def build_model(model_args):
     
@@ -21,15 +21,31 @@ def build_model(model_args):
         model = SigLiT(text_encoder = text_encoder, image_encoder = image_encoder)
     return model
 
-def get_dataloader(train_args, train = True):
-    data = train_args['dataset']
+def get_dataloader(train_args, model_args, train = True):
+    datasets = train_args['dataset']
+    training_objective = model_args['model_type']
     batch_size = train_args['batch_size']
     num_workers = train_args['num_workers']
+    sampler = None
+    dataloaders = []
     
-    dataset = ImageCaptionDataset(data)
-    if train:
-        dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True, num_workers = num_workers)
-    else:
-        dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False, num_workers = num_workers)
+    if isinstance(datasets, str):
+        datasets = [datasets]
     
-    return dataloader
+    for data in datasets:
+        if training_objective in ['clip','siglip','lit','siglit']:
+            dataset = ImageCaptionDataset(data)
+            sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
+        elif training_objective == 'crosslingual':
+            dataset = CrossLingualDataset(data)
+        else:
+            dataset = mCLIPDataset(data)
+        
+        if train:
+            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True, sampler=sampler, num_workers = num_workers)
+        else:
+            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False, num_workers = num_workers)
+        
+        dataloaders.append(dataloader)
+
+    return dataloaders

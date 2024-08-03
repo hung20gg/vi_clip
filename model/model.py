@@ -64,8 +64,17 @@ class CLIP(nn.Module):
         self.train_text = train_text
     
     def load_checkpoint(self, checkpoint):
-        self.load_state_dict(checkpoint['model_state_dict'])
+        self.load_state_dict(torch.load(checkpoint))
         
+    def save_checkpoint(self, path):
+        torch.save(self.state_dict(), path)
+        
+    def load_text_checkpoint(self, checkpoint):
+        self.text_model.load_state_dict(torch.load(checkpoint))
+        
+    def save_text_checkpoint(self, path):
+        torch.save(self.text_model.state_dict(), path)    
+    
     def transform_image(self, image):
         if isinstance(image, torch.Tensor):
             return image.to(self.device)
