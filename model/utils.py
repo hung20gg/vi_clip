@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from PIL import Image
 import numpy as np
+from transformers import AutoTokenizer, AutoModel, AutoProcessor
 
 def mean_pooling(model_output, attention_mask):
     token_embeddings = model_output #First element of model_output contains all token embeddings
@@ -49,6 +50,35 @@ class CLIPImage(nn.Module):
     def forward(self, **x):
         vision_outputs = self.vision_model(**x)[1]
         return self.visual_projection(vision_outputs)
+    
+class CLIPOriginal(nn.Module):
+    def __init__(self, model):
+        super(CLIPOriginal, self).__init__()
+        self.model = AutoModel.from_pretrained(model).eval()
+        self.processor = AutoProcessor.from_pretrained(model)
+        
+    def transform_image(self, image):
+        if isinstance(image, torch.Tensor):
+            return image.to(self.device)
+        if isinstance(image, list) or isinstance(image, np.ndarray) and all(isinstance(i, str) for i in image):
+            image = np.array([open_image(i) for i in image])
+        
+        return self.processor(images = image, return_tensors='pt').to(self.device)
+
+    def encode_text(self, text):
+        inputs = self.processor(text = text, padding = True, truncation = True, return_tensors = 'pt').to(self.device)
+        outputs = self.model(**inputs).text_embeds
+        return outputs
+    
+    def encode_image(self, image):
+        image = self.transform_image(image).to(self.device)
+        outputs = self.model(**image).image_embeds
+        return outputs
+        
+    def forward(self, image, text):
+        image_embed = self.model.encode_image(image)
+        text_embed = self.model.encode_text(text)
+        return image_embed, text_embed
     
 if __name__ == '__main__':
     x = torch.randn(3, 7, 768)
