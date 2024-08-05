@@ -4,21 +4,24 @@ training_args = {
     'epochs': 10,
     'batch_size': 2048,
     'scheduler': 'cosine',
-    'warmup_steps': 1000,
+    'warmup_steps': 500,
     'peak_lr': 1e-3,
     'num_workers': -1,
-    'dataset': ['dfn_20', 'image_caption', 'sharegpt4v','wit'],
-    'save_dir': 'checkpoints',
-    'evaluate_every': 100
+    'dataset': ['data/dfn_20', 'data/image_caption', 'data/sharegpt4v','data/wit'],
+    'image_folder': 'data/images',
+    'save_dir': 'checkpoints/text_model_base',
+    'evaluate_every': 200
 }
 
 model_args = {
     'text_model': 'vinai/phobert-base-v2',
     'vision_model': 'vit_base_patch16_siglip_224',
+    'max_length': 64,
     'model_type': 'siglip'
 }
 
 eval_args = {
+    'is_eval': True,
     'batch_size': 2048,
     'num_workers': -1,
     'dataset': ['imagenet1k'],
@@ -35,17 +38,20 @@ def parse_to_train_model_eval_args(args):
         'peak_lr': args.peak_lr,
         'num_workers': args.num_workers,
         'dataset': args.dataset,
-        'save_dir': 'checkpoints',
+        'image_folder': args.image_folder,
+        'save_dir': args.save_dir,
         'evaluate_every': 100
     }
 
     model_args = {
         'text_model': args.text_model,
         'vision_model': args.vision_model,
-        'model_type': args.model_type
+        'model_type': args.model_type,
+        'max_length': args.max_length,
     }
 
     eval_args = {
+        'is_eval': args.is_eval,
         'batch_size': args.eval_batch_size,
         'num_workers': args.eval_num_workers,
         'dataset': args.eval_dataset,

@@ -16,15 +16,24 @@ class Trainer:
         
         if isinstance(self.model_args, dict):
             self.model = build_model(model_args)
-            self.model_name = model_args['model_type'] + '_' + model_args['text_encoder'] + '_' + model_args['image_encoder']
+            self.model_name = model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
             self.model_name = self.model_name.replace('/','-')
         else:
             self.model = model_args
             self.model_name = 'custom'
         
         self.model.to(self.device)
+        if self.model.train_vision:
+            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9,0.95))
+        else:
+            parameters = list(self.model.text_model.parameters())
+            if hasattr(self.model, 'logit_scale'):
+                parameters.append(self.model.logit_scale.parameters())
+            if hasattr(self.model, 'logit_bias'):
+                parameters.append(self.model.logit_bias.parameters())
+                
+            self.optimizer = torch.optim.AdamW(parameters, lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9,0.95))
         
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9,0.95))
         self.epochs = self.train_args['epochs']
 
         self.batch_size = self.train_args['batch_size']
@@ -59,8 +68,6 @@ class Trainer:
         for epoch in range(self.epochs):
             for dataloader in self.dataloaders:
                 for i, (images, texts) in enumerate(tqdm(dataloader, desc = f'Epoch {epoch + 1}')):
-                    images = images.to(self.device)
-                    texts = texts.to(self.device)
                     self.optimizer.zero_grad()
                     loss = self.model(images, texts)
                     loss.backward()
@@ -91,8 +98,6 @@ class CrossLingualTrainer(Trainer):
         for epoch in range(self.epochs):
             for dataloader in self.dataloaders:
                 for i, (texts_1, texts_2) in enumerate(tqdm(dataloader, desc = f'Epoch {epoch + 1}')):
-                    texts_1 = texts_1.to(self.device)
-                    texts_2 = texts_2.to(self.device)
                     self.optimizer.zero_grad()
                     loss = self.model(texts_1, texts_2)
                     loss.backward()
@@ -125,8 +130,6 @@ class mCLIPTrainer(Trainer):
         for epoch in range(self.epochs):
             for dataloader in self.dataloaders:
                 for i, (images, texts_1, texts_2) in enumerate(tqdm(dataloader, desc = f'Epoch {epoch + 1}')):
-                    texts_1 = texts_1.to(self.device)
-                    texts_2 = texts_2.to(self.device)
                     self.optimizer.zero_grad()
                     loss = self.model(images, texts_1, texts_2)
                     loss.backward()

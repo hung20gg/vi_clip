@@ -15,7 +15,9 @@ class CrossLingual(nn.Module):
                  clip_model = 'google/siglip-base-patch16-224',
                  text_model = 'vinai/phobert-base-v2',
                  load_vision = False,
-                 device = None):
+                 max_length = 64,
+                 device = None,
+                 **kwargs):
         super(CrossLingual, self).__init__()
         
         if device is not None:
@@ -61,10 +63,17 @@ class CrossLingual(nn.Module):
         self.train_clip_text = False
         self.train_text = False
         
+        self.max_length = max_length
+        
     def setup_training(self, train_vision = False, train_clip_text = False, train_text = True):
         self.train_vision = train_vision & self.vision
         self.train_clip_text = train_clip_text
         self.train_text = train_text
+        
+        if self.vision and not self.train_vision:
+            self.vision_model.requires_grad_(False)
+        if not self.train_clip_text:
+            self.clip_text_model.requires_grad_(False)
         
     def load_checkpoint(self, checkpoint):
         self.load_state_dict(torch.load(checkpoint))
@@ -109,7 +118,7 @@ class CrossLingual(nn.Module):
     
     def encode_text(self, text, result = 'mean', train = False):
         
-        inputs = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
         
         if self.train_text or train:
             self.text_model.train()
@@ -132,7 +141,7 @@ class CrossLingual(nn.Module):
         return emb_text / (emb_norm + 1e-8)
     
     def encode_clip_text(self, text, train = False):
-        inputs = self.processor(text=text, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        inputs = self.processor(text=text, max_length = self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
         
         if self.train_clip_text or train:
             self.clip_text_model.train()
@@ -146,7 +155,6 @@ class CrossLingual(nn.Module):
         return outputs / (emb_norm + 1e-8)
         
     def forward(self, text_1, text_2):
-        assert self.vision, 'Vision model is not loaded'
         
         y_pred = self.encode_text(text_1)
         y_true = self.encode_clip_text(text_2)
@@ -181,7 +189,13 @@ class mCLIP(CrossLingual):
         self.train_clip_text = train_clip_text
         self.train_text = train_text
         
+        if self.vision and not self.train_vision:
+            self.vision_model.requires_grad_(False)
+        if not self.train_clip_text:
+            self.clip_text_model.requires_grad_(False)
+        
     def forward(self, image, text_1, text_2):
+        assert self.vision, 'Vision model is not loaded'
         
         image_embed = self.encode_image(image)
         text_embed_clip = self.encode_clip_text(text_2)

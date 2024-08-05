@@ -13,10 +13,11 @@ class ImageCaptionDataset(Dataset):
             df (_type_): DataFrame of the dataset
             directory (_type_): _description_
         """
+        super(ImageCaptionDataset, self).__init__()
         self.df = df
         self.images_id = df['image_id'].values
         self.imgs = df['image_path'].values
-        self.descriptions = df['label'].values
+        self.descriptions = df['caption'].values
         
         self.directory = directory
         self.descriptions = []
@@ -38,9 +39,9 @@ class CrossLingualDataset(Dataset):
             df (_type_): DataFrame of the dataset
             directory (_type_): _description_
         """
-        
-        self.original_text = df['text'].values
-        self.translated_text = df['translated_text'].values
+        super(CrossLingualDataset, self).__init__()
+        self.original_text = df['en'].values
+        self.translated_text = df['vi'].values
 
     def __len__(self):
         return len(self.original_text)
@@ -49,15 +50,18 @@ class CrossLingualDataset(Dataset):
         return self.original_text[idx], self.translated_text[idx]
     
 class mCLIPDataset(Dataset):
-    def __init__(self, df ):
+    def __init__(self, df , directory = ''):
         """_summary_
 
         Args:
             df (_type_): DataFrame of the dataset
             directory (_type_): _description_
         """
+        super(mCLIPDataset, self).__init__()
         
+        self.directory = directory
         self.images_id = df['image_id'].values
+        self.imgs = df['image_path'].values
         self.original_text = df['text'].values
         self.translated_text = df['translated_text'].values
         assert len(self.original_text) == len(self.translated_text), "Original and translated text must have the same length"

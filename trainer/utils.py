@@ -1,12 +1,11 @@
-from model import CLIP, SigLIP, LiT, SigLiT
+from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP
+import os
+import pandas as pd
 from torch.utils.data import DataLoader
 from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset
 
 def build_model(model_args):
-    
-    text_encoder = model_args['text_model']
-    image_encoder = model_args['vision_model']
-    
+        
     model_type = model_args['model_type']
     
     model = None
@@ -19,32 +18,42 @@ def build_model(model_args):
         model = LiT(**model_args)
     elif model_type.lower() == 'siglit':
         model = SigLiT(**model_args)
+    elif model_type.lower() == 'crosslingual':
+        model = CrossLingual(**model_args)
+    else:
+        model = mCLIP(**model_args)
     return model
 
-def get_dataloader(train_args, model_args, train = True):
+def get_dataloader(train_args, model_args, train = True): 
+    # Get lists of dataloader for each dataset
     datasets = train_args['dataset']
+    image_folder = train_args['image_folder']
     training_objective = model_args['model_type']
     batch_size = train_args['batch_size']
     num_workers = train_args['num_workers']
+    
     sampler = None
     dataloaders = []
+    
     
     if isinstance(datasets, str):
         datasets = [datasets]
     
     for data in datasets:
+        df = pd.read_parquet(f'{data}.parquet')
         if training_objective in ['clip','siglip','lit','siglit']:
-            dataset = ImageCaptionDataset(data)
+            dataset = ImageCaptionDataset(df, os.path.join(image_folder, data.split('/')[-1]))
             sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
         elif training_objective == 'crosslingual':
-            dataset = CrossLingualDataset(data)
+            
+            dataset = CrossLingualDataset(df)
         else:
-            dataset = mCLIPDataset(data)
+            dataset = mCLIPDataset(df, os.path.join(image_folder, data.split('/')[-1]))
         
-        if train:
+        if train and training_objective != 'crosslingual':
             dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True, sampler=sampler, num_workers = num_workers)
         else:
-            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False, num_workers = num_workers)
+            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = training_objective=='crosslingual', num_workers = num_workers)
         
         dataloaders.append(dataloader)
 

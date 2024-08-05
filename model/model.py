@@ -16,10 +16,11 @@ class CLIP(nn.Module):
                  pretrain = True,
                  projection_dim = 768,
                  device = None,
-                 model_type = 'clip'):
+                 max_length = 64,
+                 **kwargs):
         super(CLIP, self).__init__()
 
-        self.model_type = model_type
+
         if device is not None:
             self.device = device
         else:
@@ -59,10 +60,13 @@ class CLIP(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
         print(f'Number of text model parameters: {count_parameters(self.text_model)}')
         
+        self.max_length = max_length
         self.to(self.device)
     
     def setup_training(self, train_vision = True, train_text = True):
         self.train_vision = train_vision
+        if not train_vision:
+            self.vision_model.requires_grad = False
         self.train_text = train_text
     
     def load_checkpoint(self, checkpoint):
@@ -119,7 +123,7 @@ class CLIP(nn.Module):
     
     def encode_text(self, text, result = 'mean', train = False):
         
-        inputs = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
         
         if self.train_text or train:
             self.text_model.train()
@@ -149,15 +153,17 @@ class CLIP(nn.Module):
 
 class SigLIP(CLIP):
     def __init__(self, 
-                 vision_model = 'vit_base_patch16_siglip_224', #vit_base_patch16_clip_224.dfn2b
-                 text_model = 'vinai/phobert-base-v2', 
-                 vision_source = 'timm',
-                 pretrain = True,
-                 device = None,
-                 model_type = 'siglip',
+                #  vision_model = 'vit_base_patch16_siglip_224', #vit_base_patch16_clip_224.dfn2b
+                #  text_model = 'vinai/phobert-base-v2', 
+                #  vision_source = 'timm',
+                #  pretrain = True,
+                #  device = None,
+                #  model_type = 'siglip',
                  init_scale = 10,
-                 init_bias = -10):
-        super(SigLIP, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type)
+                 init_bias = -10,
+                 **kwargs):
+        # super(SigLIP, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type)
+        super(SigLIP, self).__init__(**kwargs)
         
         self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
         self.logit_bias  = nn.Parameter(torch.ones(1) * init_bias)
@@ -171,29 +177,33 @@ class SigLIP(CLIP):
     
 class LiT(CLIP):
     def __init__(self, 
-                 vision_model = 'vit_base_patch16_clip_224.openai', #vit_base_patch16_clip_224.dfn2b
-                 text_model = 'vinai/phobert-base-v2', 
-                 vision_source = 'timm',
-                 pretrain = True,
-                 model_type = 'lit',
-                 device = None):
-        super(LiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type)
-
+                #  vision_model = 'vit_base_patch16_clip_224.openai', #vit_base_patch16_clip_224.dfn2b
+                #  text_model = 'vinai/phobert-base-v2', 
+                #  vision_source = 'timm',
+                #  pretrain = True,
+                #  model_type = 'lit',
+                #  device = None
+                 **kwargs):
+        # super(LiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type)
+        super(LiT, self).__init__(**kwargs)
+        
     def setup_training(self, train_vision = False, train_text = True):
         self.train_vision = train_vision
         self.train_text = train_text
         
 class SigLiT(SigLIP):
     def __init__(self, 
-                 vision_model = 'vit_base_patch16_siglip_224', #vit_base_patch16_clip_224.dfn2b
-                 text_model = 'vinai/phobert-base-v2', 
-                 vision_source = 'timm',
-                 pretrain = True,
-                 device = None,
-                 model_type = 'siglit',
-                 init_scale = 10,
-                 init_bias = -10):
-        super(SigLiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type, init_scale, init_bias)
+                #  vision_model = 'vit_base_patch16_siglip_224', #vit_base_patch16_clip_224.dfn2b
+                #  text_model = 'vinai/phobert-base-v2', 
+                #  vision_source = 'timm',
+                #  pretrain = True,
+                #  device = None,
+                #  model_type = 'siglit',
+                #  init_scale = 10,
+                #  init_bias = -10
+                 **kwargs):
+        #super(SigLiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type, init_scale, init_bias)
+        super(SigLiT, self).__init__(**kwargs)
         
     def setup_training(self, train_vision = False, train_text = True):
         self.train_vision = train_vision

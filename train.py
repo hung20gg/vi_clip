@@ -17,13 +17,17 @@ def parse_args():
     parser.add_argument('--num_workers', type=int, default=training_args['num_workers'], help='Number of workers')
     # parser.add_argument('--training_objective', type=str, default=training_args['training_objective'], help='Training objective')
     parser.add_argument('--dataset', nargs='+', default=training_args['dataset'], help='Datasets')
+    parser.add_argument('--image_folder', type=str, default=training_args['image_folder'], help='Image folder')
+    parser.add_argument('--save_dir', type=str, default=training_args['save_dir'], help='Save directory')
     
     # Model arguments
     parser.add_argument('--text_model', type=str, default=model_args['text_model'], help='Text encoder model')
     parser.add_argument('--vision_model', type=str, default=model_args['text_model'], help='Image encoder model')
     parser.add_argument('--model_type', type=str, default=model_args['model_type'], help='Model type')
+    parser.add_argument('--max_length', type=int, default=model_args['max_length'], help='Maximum length')
     
     # Evaluation arguments
+    parser.add_argument('--is_eval', type=bool, help='Evaluate model')
     parser.add_argument('--eval_batch_size', type=int, default=eval_args['batch_size'], help='Evaluation batch size')
     parser.add_argument('--eval_num_workers', type=int, default=eval_args['num_workers'], help='Number of workers for evaluation')
     parser.add_argument('--eval_dataset', nargs='+', default=eval_args['dataset'], help='Evaluation dataset')
@@ -32,6 +36,8 @@ def parse_args():
 
 args = parse_args() 
 training_args, model_args, eval_args = parse_to_train_model_eval_args(args)
+
+
 
 # if model_args['model_type'] == 'crosslingual':
 #     trainer = CrossLingualTrainer(model_args, training_args)
