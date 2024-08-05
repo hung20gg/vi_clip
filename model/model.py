@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from .lossfn import sigliploss, cliploss
 from transformers import AutoTokenizer, AutoModel, AutoProcessor, CLIPImageProcessor
 import timm
-from .utils import mean_pooling, count_parameters, CLIPImage, CLIPText
+from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPText
 import gc
 
 
@@ -78,6 +79,10 @@ class CLIP(nn.Module):
     def transform_image(self, image):
         if isinstance(image, torch.Tensor):
             return image.to(self.device)
+        
+        if isinstance(image, list) and all(isinstance(i, str) for i in image):
+            image = np.array([open_image(i) for i in image])
+        
         if self.vision_source == 'timm':
             return self.processor(image).to(self.device)
         return self.processor(image, return_tensors='pt').to(self.device)

@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from transformers import AutoTokenizer,  AutoProcessor, AutoModel, CLIPModel, SiglipModel
-from .utils import mean_pooling, count_parameters, CLIPImage, CLIPText
+from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPText
 from .lossfn import sigliploss, cliploss
 
 import gc
@@ -66,17 +67,27 @@ class CrossLingual(nn.Module):
         self.train_text = train_text
         
     def load_checkpoint(self, checkpoint):
-        self.load_state_dict(checkpoint['model_state_dict'])
+        self.load_state_dict(torch.load(checkpoint))
+        
+    def save_checkpoint(self, path):
+        torch.save(self.state_dict(), path)
         
     def load_text_checkpoint(self, checkpoint):
-        self.text_model.load_state_dict(checkpoint['model_state_dict'])
+        self.text_model.load_state_dict(torch.load(checkpoint))
+        
+    def save_text_checkpoint(self, path):
+        torch.save(self.text_model.state_dict(), path)
         
     def transform_image(self, image):
         assert self.vision, 'Vision model is not loaded'
         
         if isinstance(image, torch.Tensor):
             return image.to(self.device)
-        return self.processor(images = image, return_tensors="pt").to(self.device)
+        if isinstance(image, list) and all(isinstance(i, str) for i in image):
+            image = np.array([open_image(i) for i in image])
+        
+        return self.processor(image, return_tensors='pt').to(self.device)
+
 
         
     def encode_image(self, image, train = False):
