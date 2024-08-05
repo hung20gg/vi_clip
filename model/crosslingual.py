@@ -83,7 +83,7 @@ class CrossLingual(nn.Module):
         
         if isinstance(image, torch.Tensor):
             return image.to(self.device)
-        if isinstance(image, list) and all(isinstance(i, str) for i in image):
+        if isinstance(image, list) or isinstance(image, np.ndarray) and all(isinstance(i, str) for i in image):
             image = np.array([open_image(i) for i in image])
         
         return self.processor(image, return_tensors='pt').to(self.device)
