@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from PIL import Image
-from ..model import build_model
+from trainer import build_model
 
 def get_dataset(name, directory = 'data/evaluate'):
     
@@ -56,7 +56,7 @@ def get_top_matches(image_embeddings, text_embeddings, top_k = 5):
     
     return img_text_scores, text_img_scores
     
-class Evaluate:
+class EvaluateModel:
     def __init__(self, model_args, eval_args, device = None):
         
         if device is not None:

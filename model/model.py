@@ -15,10 +15,11 @@ class CLIP(nn.Module):
                  vision_source = 'timm',
                  pretrain = True,
                  projection_dim = 768,
-                 device = None):
+                 device = None,
+                 model_type = 'clip'):
         super(CLIP, self).__init__()
 
-        
+        self.model_type = model_type
         if device is not None:
             self.device = device
         else:
@@ -73,9 +74,12 @@ class CLIP(nn.Module):
     def load_text_checkpoint(self, checkpoint):
         self.text_model.load_state_dict(torch.load(checkpoint))
         
-    def save_text_checkpoint(self, path):
-        torch.save(self.text_model.state_dict(), path)    
-    
+    def save_text_checkpoint(self, path, using_automodel = True):
+        if not using_automodel:
+            torch.save(self.text_model.state_dict(), path)
+        else:
+            self.text_model.save_pretrained(path)
+         
     def transform_image(self, image):
         if isinstance(image, torch.Tensor):
             return image.to(self.device)
@@ -140,6 +144,8 @@ class CLIP(nn.Module):
         text_embed = self.encode_text(text)
         
         return self.loss_fn(image_embed, text_embed)
+    
+    
 
 class SigLIP(CLIP):
     def __init__(self, 
@@ -148,9 +154,10 @@ class SigLIP(CLIP):
                  vision_source = 'timm',
                  pretrain = True,
                  device = None,
+                 model_type = 'siglip',
                  init_scale = 10,
                  init_bias = -10):
-        super(SigLIP, self).__init__(vision_model, text_model, vision_source, pretrain, device)
+        super(SigLIP, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type)
         
         self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
         self.logit_bias  = nn.Parameter(torch.ones(1) * init_bias)
@@ -168,8 +175,9 @@ class LiT(CLIP):
                  text_model = 'vinai/phobert-base-v2', 
                  vision_source = 'timm',
                  pretrain = True,
+                 model_type = 'lit',
                  device = None):
-        super(LiT, self).__init__(vision_model, text_model, vision_source, pretrain, device)
+        super(LiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type)
 
     def setup_training(self, train_vision = False, train_text = True):
         self.train_vision = train_vision
@@ -182,9 +190,10 @@ class SigLiT(SigLIP):
                  vision_source = 'timm',
                  pretrain = True,
                  device = None,
+                 model_type = 'siglit',
                  init_scale = 10,
                  init_bias = -10):
-        super(SigLiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, init_scale, init_bias)
+        super(SigLiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type, init_scale, init_bias)
         
     def setup_training(self, train_vision = False, train_text = True):
         self.train_vision = train_vision

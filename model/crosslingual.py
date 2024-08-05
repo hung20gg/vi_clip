@@ -75,8 +75,11 @@ class CrossLingual(nn.Module):
     def load_text_checkpoint(self, checkpoint):
         self.text_model.load_state_dict(torch.load(checkpoint))
         
-    def save_text_checkpoint(self, path):
-        torch.save(self.text_model.state_dict(), path)
+    def save_text_checkpoint(self, path, using_automodel = True):
+        if not using_automodel:
+            torch.save(self.text_model.state_dict(), path)
+        else:
+            self.text_model.save_pretrained(path)
         
     def transform_image(self, image):
         assert self.vision, 'Vision model is not loaded'
@@ -88,8 +91,6 @@ class CrossLingual(nn.Module):
         
         return self.processor(image, return_tensors='pt').to(self.device)
 
-
-        
     def encode_image(self, image, train = False):
         assert self.vision, 'Vision model is not loaded'
         
@@ -193,7 +194,7 @@ class mCLIP(CrossLingual):
             TTloss = self._loss_fn(text_embed, text_embed_clip)
             ITloss = self._loss_fn(image_embed, text_embed)
         
-        return ITloss + self.lambda_ * TTloss # Need verification
+        return ITloss + self.lambda_ * TTloss
         
         
         

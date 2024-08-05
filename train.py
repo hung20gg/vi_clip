@@ -1,6 +1,6 @@
-from .args import training_args, model_args, eval_args, parse_to_train_model_eval_args
-from .train.trainer import Trainer, CrossLingualTrainer, mCLIPTrainer
-from .evaluate.eval_retrieval import Evaluate
+from args import training_args, model_args, eval_args, parse_to_train_model_eval_args
+from trainer import Trainer, CrossLingualTrainer, mCLIPTrainer
+from evaluate.eval_retrieval import EvaluateModel
 import argparse
 
 def parse_args():
@@ -14,13 +14,13 @@ def parse_args():
     parser.add_argument('--scheduler', type=str, default=training_args['scheduler'], help='Scheduler type')
     parser.add_argument('--warmup_steps', type=int, default=training_args['warmup_steps'], help='Number of warmup steps')
     parser.add_argument('--peak_lr', type=float, default=training_args['peak_lr'], help='Peak learning rate')
-    parser.add_argument('--num_workers', type=int, default=training_args['nums_workers'], help='Number of workers')
+    parser.add_argument('--num_workers', type=int, default=training_args['num_workers'], help='Number of workers')
     # parser.add_argument('--training_objective', type=str, default=training_args['training_objective'], help='Training objective')
     parser.add_argument('--dataset', nargs='+', default=training_args['dataset'], help='Datasets')
     
     # Model arguments
-    parser.add_argument('--text_encoder', type=str, default=model_args['text_encoder'], help='Text encoder model')
-    parser.add_argument('--image_encoder', type=str, default=model_args['image_encoder'], help='Image encoder model')
+    parser.add_argument('--text_model', type=str, default=model_args['text_model'], help='Text encoder model')
+    parser.add_argument('--vision_model', type=str, default=model_args['text_model'], help='Image encoder model')
     parser.add_argument('--model_type', type=str, default=model_args['model_type'], help='Model type')
     
     # Evaluation arguments
@@ -33,16 +33,18 @@ def parse_args():
 args = parse_args() 
 training_args, model_args, eval_args = parse_to_train_model_eval_args(args)
 
-if model_args['model_type'] == 'crosslingual':
-    trainer = CrossLingualTrainer(model_args, training_args)
-elif model_args['model_type'] == 'mclip':
-    trainer = mCLIPTrainer(model_args, training_args)
-else:
-    trainer = Trainer(model_args, training_args)
+# if model_args['model_type'] == 'crosslingual':
+#     trainer = CrossLingualTrainer(model_args, training_args)
+# elif model_args['model_type'] == 'mclip':
+#     trainer = mCLIPTrainer(model_args, training_args)
+# else:
+#     trainer = Trainer(model_args, training_args)
     
+print('Training model:', model_args)
+print('Training arguments:', training_args)
     
-trainer.train()
+# trainer.train()
 
-evaluate = Evaluate(trainer.model, eval_args)
-evaluate.zero_shot_classification()
-evaluate.retrieval()
+# evaluate = EvaluateModel(trainer.model, eval_args)
+# evaluate.zero_shot_classification()
+# evaluate.retrieval()

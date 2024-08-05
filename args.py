@@ -13,8 +13,8 @@ training_args = {
 }
 
 model_args = {
-    'text_encoder': 'vinai/phobert-base-v2',
-    'image_encoder': 'vit_base_patch16_siglip_224',
+    'text_model': 'vinai/phobert-base-v2',
+    'vision_model': 'vit_base_patch16_siglip_224',
     'model_type': 'siglip'
 }
 
@@ -40,8 +40,8 @@ def parse_to_train_model_eval_args(args):
     }
 
     model_args = {
-        'text_encoder': args.text_encoder,
-        'image_encoder': args.image_encoder,
+        'text_model': args.text_model,
+        'vision_model': args.vision_model,
         'model_type': args.model_type
     }
 

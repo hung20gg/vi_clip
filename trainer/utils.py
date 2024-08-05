@@ -1,24 +1,24 @@
-from ..model import CLIP, SigLIP, LiT, SigLiT
+from model import CLIP, SigLIP, LiT, SigLiT
 from torch.utils.data import DataLoader
 from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset
 
 def build_model(model_args):
     
-    text_encoder = model_args['text_encoder']
-    image_encoder = model_args['image_encoder']
+    text_encoder = model_args['text_model']
+    image_encoder = model_args['vision_model']
     
     model_type = model_args['model_type']
     
     model = None
     
     if model_type.lower() == 'clip':
-        model = CLIP(text_encoder = text_encoder, image_encoder = image_encoder)
+        model = CLIP(**model_args)
     elif model_type.lower() == 'siglip':
-        model = SigLIP(text_encoder = text_encoder, image_encoder = image_encoder)
+        model = SigLIP(**model_args)
     elif model_type.lower() == 'lit':
-        model = LiT(text_encoder = text_encoder, image_encoder = image_encoder)
+        model = LiT(**model_args)
     elif model_type.lower() == 'siglit':
-        model = SigLiT(text_encoder = text_encoder, image_encoder = image_encoder)
+        model = SigLiT(**model_args)
     return model
 
 def get_dataloader(train_args, model_args, train = True):
