@@ -5,12 +5,14 @@ training_args = {
     'batch_size': 2048,
     'scheduler': 'cosine',
     'warmup_steps': 500,
-    'peak_lr': 1e-3,
+    'peak_lr': 1,
+    'intial_lr': 0.01,
     'num_workers': -1,
     'dataset': ['data/dfn_20', 'data/image_caption', 'data/sharegpt4v','data/wit'],
     'image_folder': 'data/images',
     'save_dir': 'checkpoints/text_model_base',
-    'evaluate_every': 200
+    'evaluate_every': 200,
+    'beta2': 0.999
 }
 
 model_args = {
@@ -36,11 +38,13 @@ def parse_to_train_model_eval_args(args):
         'scheduler': args.scheduler,
         'warmup_steps': args.warmup_steps,
         'peak_lr': args.peak_lr,
+        'intial_lr': args.intial_lr,
         'num_workers': args.num_workers,
         'dataset': args.dataset,
         'image_folder': args.image_folder,
         'save_dir': args.save_dir,
-        'evaluate_every': 100
+        'evaluate_every': 200,
+        'beta2': args.beta2
     }
 
     model_args = {

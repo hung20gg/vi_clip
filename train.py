@@ -14,11 +14,13 @@ def parse_args():
     parser.add_argument('--scheduler', type=str, default=training_args['scheduler'], help='Scheduler type')
     parser.add_argument('--warmup_steps', type=int, default=training_args['warmup_steps'], help='Number of warmup steps')
     parser.add_argument('--peak_lr', type=float, default=training_args['peak_lr'], help='Peak learning rate')
+    parser.add_argument('--intial_lr', type=float, default=training_args['intial_lr'], help='Initial learning rate')
     parser.add_argument('--num_workers', type=int, default=training_args['num_workers'], help='Number of workers')
     # parser.add_argument('--training_objective', type=str, default=training_args['training_objective'], help='Training objective')
     parser.add_argument('--dataset', nargs='+', default=training_args['dataset'], help='Datasets')
     parser.add_argument('--image_folder', type=str, default=training_args['image_folder'], help='Image folder')
     parser.add_argument('--save_dir', type=str, default=training_args['save_dir'], help='Save directory')
+    parser.add_argument('--beta2', type=float, default=training_args['beta2'], help='Beta2')
     
     # Model arguments
     parser.add_argument('--text_model', type=str, default=model_args['text_model'], help='Text encoder model')
