@@ -168,3 +168,41 @@ class mCLIPTrainer(Trainer):
                     losses.append(loss.item())
                     
         return losses
+    
+    
+    
+def ddp_train(train_args, model_args):
+    import torch.multiprocessing as mp
+    from torch.utils.data.distributed import (
+        DistributedSampler,
+    )  # Distribute data across multiple gpus
+    from torch.distributed import init_process_group, destroy_process_group
+
+
+    # Each process control a single gpu
+    def ddp_setup(rank: int, world_size: int):
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "54321"  # select any idle port on your machine
+
+        init_process_group(backend="nccl", rank=rank, world_size=world_size)
+    
+    def main_ddp(
+    rank: int,
+    world_size: int,
+):
+        ddp_setup(rank, world_size)  # initialize ddp
+
+        train_args['train_type'] = 'ddp'
+        if model_args['model_type'] == 'crosslingual':
+            trainer = CrossLingualTrainer(model_args, train_args)
+        elif model_args['model_type'] == 'mclip':
+            trainer = mCLIPTrainer(model_args, train_args)
+        else:
+            trainer = Trainer(model_args, train_args)
+            
+        losses = trainer.train()
+
+        destroy_process_group()
+    
+    world_size = torch.cuda.device_count()
+    mp.spawn(main_ddp, args=(world_size), nprocs=world_size)

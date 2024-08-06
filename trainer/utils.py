@@ -56,9 +56,9 @@ def get_dataloader(train_args, model_args, train = True):
             sampler = DistributedSampler(dataset)
             
         if train and training_objective != 'crosslingual':
-            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True, sampler=sampler, num_workers = num_workers)
+            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = not is_ddp, sampler=sampler, num_workers = num_workers)
         else:
-            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = training_objective=='crosslingual', num_workers = num_workers)
+            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = not is_ddp, num_workers = num_workers)
         
         dataloaders.append(dataloader)
         samplers.append(sampler)
