@@ -31,10 +31,11 @@ def get_dataloader(train_args, model_args, train = True):
     training_objective = model_args['model_type']
     batch_size = train_args['batch_size']
     num_workers = train_args['num_workers']
+    is_ddp = train_args['ddp']
     
     sampler = None
     dataloaders = []
-    
+    samplers = []
     
     if isinstance(datasets, str):
         datasets = [datasets]
@@ -50,11 +51,16 @@ def get_dataloader(train_args, model_args, train = True):
         else:
             dataset = mCLIPDataset(df, os.path.join(image_folder, data.split('/')[-1]))
         
+        if is_ddp:
+            from torch.utils.data.distributed import DistributedSampler
+            sampler = DistributedSampler(dataset)
+            
         if train and training_objective != 'crosslingual':
             dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True, sampler=sampler, num_workers = num_workers)
         else:
             dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = training_objective=='crosslingual', num_workers = num_workers)
         
         dataloaders.append(dataloader)
+        samplers.append(sampler)
 
-    return dataloaders
+    return dataloaders, samplers

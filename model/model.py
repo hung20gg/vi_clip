@@ -15,17 +15,10 @@ class CLIP(nn.Module):
                  vision_source = 'timm',
                  pretrain = True,
                  projection_dim = 768,
-                 device = None,
                  max_length = 64,
                  **kwargs):
         super(CLIP, self).__init__()
 
-
-        if device is not None:
-            self.device = device
-        else:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
         self.loss_fn = cliploss
         
         print(f"Using device: {self.device}")
@@ -97,7 +90,7 @@ class CLIP(nn.Module):
 
         
     def encode_image(self, image, train = False):
-        image = self.transform_image(image).to(self.device)
+        image = self.transform_image(image).to(self.vision_model.device)
         if self.vision_source == 'timm':
             if len(image.shape) == 3:
                 image = image.unsqueeze(0)
@@ -123,7 +116,7 @@ class CLIP(nn.Module):
     
     def encode_text(self, text, result = 'mean', train = False):
         
-        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.text_model.device)
         
         if self.train_text or train:
             self.text_model.train()

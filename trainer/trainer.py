@@ -6,9 +6,13 @@ from .utils import build_model, get_dataloader
 from .scheduler import linear_warmup_decay_scheduler, cosine_warmup_scheduler
 
 class Trainer:
-    def __init__(self, model_args, train_args : dict, device = None):
+    def __init__(self, model_args : dict, train_args : dict, device = None):
         self.model_args = model_args
         self.train_args = train_args
+        
+        self.train_type = train_args['train_type']
+        
+        
         if device is not None:
             self.device = device
         else:
@@ -22,7 +26,11 @@ class Trainer:
             self.model = model_args
             self.model_name = 'custom'
         
-        self.model.to(self.device)
+        if self.train_type == 'ddp':
+            self.gpu_id = train_args['gpu_id']
+            self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids = [self.gpu_id])
+        else:
+            self.model.to(self.device)
         self.model.setup_training()
         
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
@@ -39,7 +47,7 @@ class Trainer:
 
         self.batch_size = self.train_args['batch_size']
         
-        self.dataloaders = get_dataloader(train_args, model_args) 
+        self.dataloaders, self.samplers = get_dataloader(train_args, model_args) 
         self.len_dataloader = sum([len(loader) for loader in self.dataloaders])
 
         self.save_dir = self.train_args['save_dir']
@@ -61,14 +69,20 @@ class Trainer:
     def load_checkpoint(self, checkpoint):
         self.model.load_checkpoint(checkpoint['model_state_dict'])
         
+    def distributed_update(self, sampler, epoch):
+        if self.train_type == 'ddp':
+            sampler.set_epoch(epoch)
+        
     def train(self):
         # Not reporting the loss on WanDB
         self.model.setup_training()
         self.model.train()
         losses = []
         i = 0
+        min_loss = 1e9
         for epoch in range(self.epochs):
-            for dataloader in self.dataloaders:
+            for dataloader, sampler in zip(self.dataloaders, self.samplers):
+                self.distributed_update(sampler, epoch)
                 for images, texts in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i+=1
                     self.optimizer.zero_grad()
@@ -77,19 +91,27 @@ class Trainer:
                     self.optimizer.step()
                     self.scheduler.step()
                     if i % self.evaluate_every == 0:
-                        if loss.item() < min_loss:
-                            print(f'Loss: {loss.item()}')
-                            min_loss = loss.item()
-                            
-                            if not self.model.train_vision:
-                                self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}.pth'))
-                            else:
-                                self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
-                     
+                        self.check_save_model(loss, min_loss)
+
                     losses.append(loss.item())
         return losses
-
-
+    
+    def save_checkpoint(self):
+        if not self.model.train_vision:
+            self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}.pth'))
+        else:
+            self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
+    
+    def check_save_model(self, loss, min_loss):
+        if loss.item() < min_loss:
+            if self.train_type == 'ddp':
+                if self.gpu_id == 0:
+                    self.save_checkpoint()
+            else:
+                self.save_checkpoint()
+                
+        return min(loss.item(), min_loss)  
+    
 class CrossLingualTrainer(Trainer):
     def __init__(self, model_args, train_args, device = None):
         super(CrossLingualTrainer, self).__init__(model_args, train_args, device)
@@ -101,7 +123,8 @@ class CrossLingualTrainer(Trainer):
         min_loss = 1e9
         i = 0
         for epoch in range(self.epochs):
-            for dataloader in self.dataloaders:
+            for dataloader, sampler in zip(self.dataloaders, self.samplers):
+                self.distributed_update(sampler, epoch)
                 for texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
                     self.optimizer.zero_grad()
@@ -111,14 +134,7 @@ class CrossLingualTrainer(Trainer):
                     self.scheduler.step()
                     
                     if i % self.evaluate_every == 0:
-                        print(f'Loss: {loss.item()}')
-                        if loss.item() < min_loss:
-                            min_loss = loss.item()
-                            
-                            if not self.model.train_vision:
-                                self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}.pth'))
-                            else:
-                                self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
+                        min_loss = self.check_save_model(loss, min_loss) 
                             
                     losses.append(loss.item())
                     
@@ -136,7 +152,8 @@ class mCLIPTrainer(Trainer):
         min_loss = 1e9
         i = 0
         for epoch in range(self.epochs):
-            for dataloader in self.dataloaders:
+            for dataloader, sampler in zip(self.dataloaders, self.samplers):
+                self.distributed_update(sampler, epoch)
                 for images, texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
                     self.optimizer.zero_grad()
@@ -146,13 +163,7 @@ class mCLIPTrainer(Trainer):
                     self.scheduler.step()
                     
                     if i % self.evaluate_every == 0:
-                        if loss.item() < min_loss:
-                            min_loss = loss.item()
-                            
-                            if not self.model.train_vision:
-                                self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
-                            else:
-                                self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
+                        min_loss = self.check_save_model(loss, min_loss) 
                             
                     losses.append(loss.item())
                     

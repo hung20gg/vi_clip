@@ -16,14 +16,8 @@ class CrossLingual(nn.Module):
                  text_model = 'vinai/phobert-base-v2',
                  load_vision = False,
                  max_length = 64,
-                 device = None,
                  **kwargs):
         super(CrossLingual, self).__init__()
-        
-        if device is not None:
-            self.device = device
-        else:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.loss_fn = nn.MSELoss()
         
@@ -48,8 +42,6 @@ class CrossLingual(nn.Module):
         
         del model
         gc.collect()
-        if self.device == 'cuda':
-            torch.cuda.empty_cache()
         
         self.text_model = AutoModel.from_pretrained(text_model).to(self.device)
         if self.projection_dim != self.text_model.config.hidden_size:
@@ -94,16 +86,16 @@ class CrossLingual(nn.Module):
         assert self.vision, 'Vision model is not loaded'
         
         if isinstance(image, torch.Tensor):
-            return image.to(self.device)
+            return image.to(self.vision_model.device)
         if isinstance(image, list) or isinstance(image, np.ndarray) and all(isinstance(i, str) for i in image):
             image = np.array([open_image(i) for i in image])
         
-        return self.processor(image, return_tensors='pt').to(self.device)
+        return self.processor(image, return_tensors='pt').to(self.vision_model.device)
 
     def encode_image(self, image, train = False):
         assert self.vision, 'Vision model is not loaded'
         
-        image = self.transform_image(image).to(self.device)
+        image = self.transform_image(image)
         
         if self.train_vision or train:
             self.vision_model.train()
@@ -118,7 +110,7 @@ class CrossLingual(nn.Module):
     
     def encode_text(self, text, result = 'mean', train = False):
         
-        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.text_model.device)
         
         if self.train_text or train:
             self.text_model.train()
@@ -141,7 +133,7 @@ class CrossLingual(nn.Module):
         return emb_text / (emb_norm + 1e-8)
     
     def encode_clip_text(self, text, train = False):
-        inputs = self.processor(text=text, max_length = self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        inputs = self.processor(text=text, max_length = self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.clip_text_model.device)
         
         if self.train_clip_text or train:
             self.clip_text_model.train()
