@@ -24,7 +24,7 @@ class CrossLingual(nn.Module):
         print('Loading CLIP/SigLIP model')
         self.vision = load_vision
         
-        model = AutoModel.from_pretrained(clip_model).to(self.device)
+        model = AutoModel.from_pretrained(clip_model)
         
         if hasattr(model, 'projection_dim'):
             self.projection_dim = model.projection_dim
@@ -41,7 +41,7 @@ class CrossLingual(nn.Module):
         del model
         gc.collect()
         
-        self.text_model = AutoModel.from_pretrained(text_model).to(self.device)
+        self.text_model = AutoModel.from_pretrained(text_model)
         if self.projection_dim != self.text_model.config.hidden_size:
             self.text_projection = nn.Linear(self.text_model.config.hidden_size, self.projection_dim)
         else:

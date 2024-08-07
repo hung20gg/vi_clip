@@ -75,14 +75,14 @@ class CLIP(nn.Module):
          
     def transform_image(self, image):
         if isinstance(image, torch.Tensor):
-            return image.to(self.device)
+            return image
         
         if isinstance(image, list) and all(isinstance(i, str) for i in image):
             image = np.array([open_image(i) for i in image])
         
         if self.vision_source == 'timm':
-            return self.processor(image).to(self.device)
-        return self.processor(image, return_tensors='pt').to(self.device)
+            return self.processor(image)
+        return self.processor(image, return_tensors='pt')
 
         
     def encode_image(self, image, train = False):
