@@ -55,7 +55,16 @@ class CrossLingual(nn.Module):
         
         self.max_length = max_length
         
-    def setup_training(self, train_vision = False, train_clip_text = False, train_text = True):
+    def setup_device(self, device = None):
+        if device is not None:
+            self.device = device
+        else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.to(self.device)
+        
+    def setup_training(self, train_vision = False, train_clip_text = False, train_text = True, device = None):
+        self.setup_device(device)
+        
         self.train_vision = train_vision & self.vision
         self.train_clip_text = train_clip_text
         self.train_text = train_text
@@ -88,7 +97,7 @@ class CrossLingual(nn.Module):
         if isinstance(image, list) or isinstance(image, np.ndarray) and all(isinstance(i, str) for i in image):
             image = np.array([open_image(i) for i in image])
         
-        return self.processor(image, return_tensors='pt').to(self.vision_model.device)
+        return self.processor(image, return_tensors='pt').to(self.device)
 
     def encode_image(self, image, train = False):
         assert self.vision, 'Vision model is not loaded'
@@ -108,7 +117,7 @@ class CrossLingual(nn.Module):
     
     def encode_text(self, text, result = 'mean', train = False):
         
-        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.text_model.device)
+        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
         
         if self.train_text or train:
             self.text_model.train()
@@ -131,7 +140,7 @@ class CrossLingual(nn.Module):
         return emb_text / (emb_norm + 1e-8)
     
     def encode_clip_text(self, text, train = False):
-        inputs = self.processor(text=text, max_length = self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.clip_text_model.device)
+        inputs = self.processor(text=text, max_length = self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
         
         if self.train_clip_text or train:
             self.clip_text_model.train()
@@ -174,7 +183,8 @@ class mCLIP(CrossLingual):
             self._loss_fn = cliploss
         self.lambda_ = lambda_
         
-    def setup_training(self, train_vision=True, train_clip_text=False, train_text=True):
+    def setup_training(self, train_vision=True, train_clip_text=False, train_text=True, device=None):
+        self.setup_device(device)
         self.train_vision = train_vision & self.vision
         self.train_clip_text = train_clip_text
         self.train_text = train_text

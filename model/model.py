@@ -52,11 +52,19 @@ class CLIP(nn.Module):
         self.max_length = max_length
         self.to(self.device)
     
-    def setup_training(self, train_vision = True, train_text = True):
+    def setup_training(self, train_vision = True, train_text = True, device = None):
+        self.setup_device(device)
         self.train_vision = train_vision
         if not train_vision:
             self.vision_model.requires_grad = False
         self.train_text = train_text
+        
+    def setup_device(self, device = None):
+        if device is not None:
+            self.device = device
+        else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.to(self.device)
     
     def load_checkpoint(self, checkpoint):
         self.load_state_dict(torch.load(checkpoint))
@@ -86,7 +94,7 @@ class CLIP(nn.Module):
 
         
     def encode_image(self, image, train = False):
-        image = self.transform_image(image).to(self.vision_model.device)
+        image = self.transform_image(image).to(self.device)
         if self.vision_source == 'timm':
             if len(image.shape) == 3:
                 image = image.unsqueeze(0)
@@ -112,7 +120,7 @@ class CLIP(nn.Module):
     
     def encode_text(self, text, result = 'mean', train = False):
         
-        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.text_model.device)
+        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
         
         if self.train_text or train:
             self.text_model.train()
@@ -160,7 +168,8 @@ class LiT(CLIP):
     def __init__(self, **kwargs):
         super(LiT, self).__init__(**kwargs)
         
-    def setup_training(self, train_vision = False, train_text = True):
+    def setup_training(self, train_vision = False, train_text = True, device = None):
+        self.setup_device(device)
         self.train_vision = train_vision
         self.train_text = train_text
         
@@ -168,7 +177,8 @@ class SigLiT(SigLIP):
     def __init__(self, **kwargs):
         super(SigLiT, self).__init__(**kwargs)
         
-    def setup_training(self, train_vision = False, train_text = True):
+    def setup_training(self, train_vision = False, train_text = True, device = None):
+        self.setup_device(device)
         self.train_vision = train_vision
         self.train_text = train_text
     

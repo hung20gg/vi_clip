@@ -19,10 +19,10 @@ class Trainer:
         else:
             self.model = model_args
             self.model_name = 'custom'
-        self.model.setup_training()
+        
             
         self.device = train_args['device']
-        self.model.to(self.device)
+        self.model.setup_training(device=self.device)
         
         if self.train_type == 'ddp':
             torch.cuda.set_device(self.device)  # master gpu takes up extra memory
@@ -66,7 +66,6 @@ class Trainer:
         
     def train(self):
         # Not reporting the loss on WanDB
-        self.model.setup_training()
         self.model.train()
         losses = []
         i = 0
@@ -108,7 +107,6 @@ class CrossLingualTrainer(Trainer):
         super(CrossLingualTrainer, self).__init__(model_args, train_args)
         
     def train(self):
-        self.model.setup_training()
         self.model.train()
         losses = []
         min_loss = 1e9
@@ -137,7 +135,6 @@ class mCLIPTrainer(Trainer):
         super(mCLIPTrainer, self).__init__(model_args, train_args)
         
     def train(self):
-        
         self.model.train()
         losses = []
         min_loss = 1e9
