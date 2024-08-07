@@ -38,6 +38,10 @@ class CLIP(nn.Module):
             
             del model
             gc.collect()
+            try:
+                torch.cuda.empty_cache()
+            except:
+                print('No GPU available')
         
         print(f'Number of vision model parameters: {count_parameters(self.vision_model)}')
         

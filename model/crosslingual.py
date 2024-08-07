@@ -40,6 +40,10 @@ class CrossLingual(nn.Module):
         
         del model
         gc.collect()
+        try:
+            torch.cuda.empty_cache()
+        except:
+            print('No GPU available')
         
         self.text_model = AutoModel.from_pretrained(text_model)
         if self.projection_dim != self.text_model.config.hidden_size:
