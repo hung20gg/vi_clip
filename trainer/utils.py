@@ -31,7 +31,7 @@ def get_dataloader(train_args, model_args, train = True):
     training_objective = model_args['model_type']
     batch_size = train_args['batch_size']
     num_workers = train_args['num_workers']
-    is_ddp = train_args['ddp']
+    is_ddp = train_args['train_type'] == 'ddp'
     
     sampler = None
     dataloaders = []
