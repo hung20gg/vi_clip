@@ -141,8 +141,8 @@ class CrossLingual(nn.Module):
         assert self.vision, 'Vision model is not loaded'
         
         if isinstance(image, torch.Tensor):
-            return image.to(self.vision_model.device)
-        if isinstance(image, list) or isinstance(image, np.ndarray) and all(isinstance(i, str) for i in image):
+            return image.to(self.device)
+        if all(isinstance(i, str) for i in image):
             image = np.array([open_image(i) for i in image])
         
         return self.processor(image, return_tensors='pt').to(self.device)
@@ -184,6 +184,11 @@ class CrossLingual(nn.Module):
                 
         emb_norm = torch.norm(outputs, dim=1, keepdim=True)
         return outputs / (emb_norm + 1e-8)
+    
+    def encode(self, images, texts):
+        image_embed = self.encode_image(images)
+        text_embed = self.encode_text(texts)
+        return image_embed, text_embed
         
     def forward(self, text_1, text_2):
         

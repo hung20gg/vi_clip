@@ -72,7 +72,7 @@ class LiT2:
         if isinstance(image, torch.Tensor):
             return image
         
-        if isinstance(image, list) and all(isinstance(i, str) for i in image):
+        if all(isinstance(i, str) for i in image):
             image = np.array([open_image(i) for i in image])
         
         return self.processor(image)
@@ -170,36 +170,36 @@ class CLIP(nn.Module):
         else:
             self.text_model.save_pretrained(path)
          
-    def transform_image(self, image):
+    def transform_image(self, images):
         if isinstance(image, torch.Tensor):
             return image
         
-        if isinstance(image, list) and all(isinstance(i, str) for i in image):
-            image = np.array([open_image(i) for i in image])
+        if all(isinstance(i, str) for i in images):
+            images = np.array([open_image(i) for i in images])
         
         if self.vision_source == 'timm':
-            return self.processor(image)
-        return self.processor(image, return_tensors='pt')
+            return self.processor(images)
+        return self.processor(images, return_tensors='pt')
 
         
-    def encode_image(self, image, train = False):
-        image = self.transform_image(image).to(self.device)
+    def encode_image(self, images):
+        images = self.transform_image(images).to(self.device)
         if self.vision_source == 'timm':
-            if len(image.shape) == 3:
-                image = image.unsqueeze(0)
+            if len(images.shape) == 3:
+                images = images.unsqueeze(0)
             self.vision_model.eval()
-            output = self.vision_model(image)
+            output = self.vision_model(images)
         
         else:
             self.vision_model.eval()
-            output = self.vision_model(**image)
+            output = self.vision_model(**images)
 
         emb_norm = torch.norm(output, dim=1, keepdim=True)
         return output / (emb_norm + 1e-8)
     
-    def encode_text(self, text, result = 'mean', train = False):
+    def encode_text(self, texts, result = 'mean'):
         
-        inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
+        inputs = self.tokenizer(texts, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
         outputs = self.text_model(**inputs).last_hidden_state
                 
         if result == 'eos':
@@ -211,10 +211,17 @@ class CLIP(nn.Module):
         
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)
+    
+    def encode(self, images, texts):
         
-    def forward(self, image, text):
-        image_embed = self.encode_image(image)
-        text_embed = self.encode_text(text)
+        image_embed = self.encode_image(images)
+        text_embed = self.encode_text(texts)
+        
+        return image_embed, text_embed
+        
+    def forward(self, images, texts):
+        image_embed = self.encode_image(images)
+        text_embed = self.encode_text(texts)
         
         return self.loss_fn(image_embed, text_embed)
     
