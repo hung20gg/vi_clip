@@ -112,8 +112,8 @@ class Trainer:
         return min(loss.item(), min_loss)  
     
 class CrossLingualTrainer(Trainer):
-    def __init__(self, model_args, train_args, device = None):
-        super(CrossLingualTrainer, self).__init__(model_args, train_args, device)
+    def __init__(self, model_args, train_args):
+        super(CrossLingualTrainer, self).__init__(model_args, train_args)
         
     def train(self):
         self.model.setup_training()
@@ -141,8 +141,8 @@ class CrossLingualTrainer(Trainer):
         return losses
     
 class mCLIPTrainer(Trainer):
-    def __init__(self, model_args, train_args, device = None):
-        super(mCLIPTrainer, self).__init__(model_args, train_args, device)
+    def __init__(self, model_args, train_args):
+        super(mCLIPTrainer, self).__init__(model_args, train_args)
         
     def train(self):
         
