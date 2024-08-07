@@ -110,11 +110,17 @@ class CrossLingual(nn.Module):
         self.train_text = train_text
         
         if self.vision and not self.train_vision:
+            print('Freezing vision model')
             for param in self.vision_model.parameters():
                 param.requires_grad = False
+
         if not self.train_clip_text:
+            print('Freezing CLIP text model')
             for param in self.clip_text_model.parameters():
                 param.requires_grad = False
+                
+        num_params = count_parameters(self)
+        print(f'Number of parameters: {num_params}')
         
     def load_checkpoint(self, checkpoint):
         self.load_state_dict(torch.load(checkpoint))
@@ -216,11 +222,16 @@ class mCLIP(CrossLingual):
         self.train_text = train_text
         
         if self.vision and not self.train_vision:
+            print('Freezing vision model')
             for param in self.vision_model.parameters():
                 param.requires_grad = False
         if not self.train_clip_text:
+            print('Freezing CLIP text model')
             for param in self.clip_text_model.parameters():
                 param.requires_grad = False
+                
+        num_params = count_parameters(self)
+        print(f'Number of parameters: {num_params}')
         
     def forward(self, image, text_1, text_2):
         assert self.vision, 'Vision model is not loaded'

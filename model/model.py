@@ -140,9 +140,13 @@ class CLIP(nn.Module):
         self.setup_device(device)
         self.train_vision = train_vision
         if not train_vision:
+            print('Freezing vision model')
             for param in self.vision_model.parameters():
                 param.requires_grad = False
         self.train_text = train_text
+        
+        num_params = count_parameters(self)
+        print(f'Number of parameters: {num_params}')
         
     def setup_device(self, device = None):
         if device is not None:
