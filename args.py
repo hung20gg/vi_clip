@@ -19,8 +19,10 @@ training_args = {
 model_args = {
     'text_model': 'vinai/phobert-base-v2',
     'vision_model': 'vit_base_patch16_siglip_224',
+    'clip_model': 'google/siglip-base-patch16-224',
     'max_length': 64,
-    'model_type': 'siglip'
+    'model_type': 'siglip',
+    'pretrain': True,
 }
 
 eval_args = {
@@ -51,8 +53,10 @@ def parse_to_train_model_eval_args(args):
     model_args = {
         'text_model': args.text_model,
         'vision_model': args.vision_model,
+        'clip_model': args.clip_model,
         'model_type': args.model_type,
         'max_length': args.max_length,
+        'pretrain': args.pretrain,
     }
 
     eval_args = {

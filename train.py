@@ -26,8 +26,10 @@ def parse_args():
     # Model arguments
     parser.add_argument('--text_model', type=str, default=model_args['text_model'], help='Text encoder model')
     parser.add_argument('--vision_model', type=str, default=model_args['text_model'], help='Image encoder model')
+    parser.add_argument('--clip_model', type=str, default=model_args['clip_model'], help='CLIP model')
     parser.add_argument('--model_type', type=str, default=model_args['model_type'], help='Model type')
     parser.add_argument('--max_length', type=int, default=model_args['max_length'], help='Maximum length')
+    parser.add_argument('--pretrain', type=bool, default=model_args['pretrain'], help='Pretrain model')
     
     # Evaluation arguments
     parser.add_argument('--is_eval', type=bool, help='Evaluate model')
