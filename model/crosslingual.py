@@ -20,9 +20,7 @@ class CrossLingual(nn.Module):
         super(CrossLingual, self).__init__()
         
         self.loss_fn = nn.MSELoss()
-        
-        print(f"Using device: {self.device}")
-        
+
         print('Loading CLIP/SigLIP model')
         self.vision = load_vision
         

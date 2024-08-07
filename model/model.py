@@ -20,9 +20,7 @@ class CLIP(nn.Module):
         super(CLIP, self).__init__()
 
         self.loss_fn = cliploss
-        
-        print(f"Using device: {self.device}")
-        
+
         print('Loading vision model')
         self.vision_source = vision_source
         if vision_source == 'timm':
@@ -40,8 +38,6 @@ class CLIP(nn.Module):
             
             del model
             gc.collect()
-            if self.device == 'cuda':
-                torch.cuda.empty_cache()
         
         print(f'Number of vision model parameters: {count_parameters(self.vision_model)}')
         
@@ -142,20 +138,12 @@ class CLIP(nn.Module):
         
         return self.loss_fn(image_embed, text_embed)
     
-    
 
 class SigLIP(CLIP):
     def __init__(self, 
-                #  vision_model = 'vit_base_patch16_siglip_224', #vit_base_patch16_clip_224.dfn2b
-                #  text_model = 'vinai/phobert-base-v2', 
-                #  vision_source = 'timm',
-                #  pretrain = True,
-                #  device = None,
-                #  model_type = 'siglip',
                  init_scale = 10,
                  init_bias = -10,
                  **kwargs):
-        # super(SigLIP, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type)
         super(SigLIP, self).__init__(**kwargs)
         
         self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
@@ -169,15 +157,7 @@ class SigLIP(CLIP):
         return self.loss_fn(image_embed, text_embed, self.logit_scale, self.logit_bias)
     
 class LiT(CLIP):
-    def __init__(self, 
-                #  vision_model = 'vit_base_patch16_clip_224.openai', #vit_base_patch16_clip_224.dfn2b
-                #  text_model = 'vinai/phobert-base-v2', 
-                #  vision_source = 'timm',
-                #  pretrain = True,
-                #  model_type = 'lit',
-                #  device = None
-                 **kwargs):
-        # super(LiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type)
+    def __init__(self, **kwargs):
         super(LiT, self).__init__(**kwargs)
         
     def setup_training(self, train_vision = False, train_text = True):
@@ -185,17 +165,7 @@ class LiT(CLIP):
         self.train_text = train_text
         
 class SigLiT(SigLIP):
-    def __init__(self, 
-                #  vision_model = 'vit_base_patch16_siglip_224', #vit_base_patch16_clip_224.dfn2b
-                #  text_model = 'vinai/phobert-base-v2', 
-                #  vision_source = 'timm',
-                #  pretrain = True,
-                #  device = None,
-                #  model_type = 'siglit',
-                #  init_scale = 10,
-                #  init_bias = -10
-                 **kwargs):
-        #super(SigLiT, self).__init__(vision_model, text_model, vision_source, pretrain, device, model_type, init_scale, init_bias)
+    def __init__(self, **kwargs):
         super(SigLiT, self).__init__(**kwargs)
         
     def setup_training(self, train_vision = False, train_text = True):
