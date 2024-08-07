@@ -6,17 +6,11 @@ from .utils import build_model, get_dataloader
 from .scheduler import linear_warmup_decay_scheduler, cosine_warmup_scheduler
 
 class Trainer:
-    def __init__(self, model_args : dict, train_args : dict, device = None):
+    def __init__(self, model_args : dict, train_args : dict):
         self.model_args = model_args
         self.train_args = train_args
         
         self.train_type = train_args['train_type']
-        
-        
-        if device is not None:
-            self.device = device
-        else:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         if isinstance(self.model_args, dict):
             self.model = build_model(model_args)
@@ -29,7 +23,12 @@ class Trainer:
         if self.train_type == 'ddp':
             self.gpu_id = train_args['gpu_id']
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids = [self.gpu_id])
+        elif self.train_type == 'dp':
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self.model = torch.nn.DataParallel(self.model)
+            self.model.to(self.device)
         else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             self.model.to(self.device)
         self.model.setup_training()
         
