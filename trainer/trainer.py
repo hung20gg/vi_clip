@@ -19,29 +19,21 @@ class Trainer:
         else:
             self.model = model_args
             self.model_name = 'custom'
+        self.model.setup_training()
+            
+        self.device = train_args['device']
+        self.model.to(self.device)
         
         if self.train_type == 'ddp':
-            self.gpu_id = train_args['gpu_id']
-            self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids = [self.gpu_id])
+            torch.cuda.set_device(self.device)  # master gpu takes up extra memory
+            torch.cuda.empty_cache()
+            self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids = [self.device])
+            
         elif self.train_type == 'dp':
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            self.model = torch.nn.DataParallel(self.model)
-            self.model.to(self.device)
-        else:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            self.model.to(self.device)
-        self.model.setup_training()
+            self.model = torch.nn.DataParallel(self.model).to(self.device)
         
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
-        # else:
-        #     parameters = list(self.model.text_model.parameters())
-        #     if hasattr(self.model, 'logit_scale'):
-        #         parameters.append(self.model.logit_scale.parameters())
-        #     if hasattr(self.model, 'logit_bias'):
-        #         parameters.append(self.model.logit_bias.parameters())
-                
-        #     self.optimizer = torch.optim.AdamW(parameters, lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
-        
+
         self.epochs = self.train_args['epochs']
 
         self.batch_size = self.train_args['batch_size']
@@ -172,9 +164,6 @@ class mCLIPTrainer(Trainer):
     
 def ddp_train(train_args, model_args):
     import torch.multiprocessing as mp
-    from torch.utils.data.distributed import (
-        DistributedSampler,
-    )  # Distribute data across multiple gpus
     from torch.distributed import init_process_group, destroy_process_group
 
 
@@ -192,6 +181,7 @@ def ddp_train(train_args, model_args):
         ddp_setup(rank, world_size)  # initialize ddp
 
         train_args['train_type'] = 'ddp'
+        train_args['device'] = rank
         if model_args['model_type'] == 'crosslingual':
             trainer = CrossLingualTrainer(model_args, train_args)
         elif model_args['model_type'] == 'mclip':

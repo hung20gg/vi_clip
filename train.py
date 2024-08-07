@@ -8,6 +8,7 @@ def parse_args():
     
     # Training arguments
     parser.add_argument('--train_type', type=str, default=training_args['train_type'], help='Training type')
+    parser.add_argument('--device', type=str, default=training_args['device'], help='Device')
     parser.add_argument('--lr', type=float, default=training_args['lr'], help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=training_args['weight_decay'], help='Weight decay')
     parser.add_argument('--epochs', type=int, default=training_args['epochs'], help='Number of epochs')

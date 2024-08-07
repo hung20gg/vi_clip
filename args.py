@@ -1,5 +1,6 @@
 training_args = {
     'train_type':'single',
+    'device': 'cuda',
     'lr': 5e-4,
     'weight_decay': 1e-3,
     'epochs': 10,
@@ -34,6 +35,8 @@ eval_args = {
 
 def parse_to_train_model_eval_args(args):
     training_args = {
+        'train_type': args.train_type,
+        'device': args.device,
         'lr': args.lr,
         'weight_decay': args.weight_decay,
         'epochs': args.epochs,
