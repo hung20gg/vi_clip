@@ -1,4 +1,5 @@
 training_args = {
+    'train_type':'single',
     'lr': 5e-4,
     'weight_decay': 1e-3,
     'epochs': 10,
