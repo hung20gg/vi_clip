@@ -16,12 +16,12 @@ class Trainer:
         self.train_type = train_args['train_type']
         self.device = train_args['device']
         
-        self.model = build_model(model_args, self.device)
+        self.model = build_model(model_args)
+        self.model.setup_training(device=self.device)
+        
         self.model_name = self.train_type + "_" + model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
         self.model_name = self.model_name.replace('/','-')
             
-        
-        self.model.setup_training(device=self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
         
         if self.train_type == 'ddp':
