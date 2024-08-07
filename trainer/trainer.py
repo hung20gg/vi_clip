@@ -100,7 +100,7 @@ class Trainer:
             else:
                 self.save_checkpoint()
                 
-        return min(loss.item(), min_loss)  
+        return min(loss.sum().item(), min_loss)  
     
 class CrossLingualTrainer(Trainer):
     def __init__(self, model_args, train_args):
@@ -125,7 +125,7 @@ class CrossLingualTrainer(Trainer):
                     if i % self.evaluate_every == 0:
                         min_loss = self.check_save_model(loss, min_loss) 
                             
-                    losses.append(loss.item())
+                    losses.append(loss.sum().item())
                     
                     
         return losses
@@ -153,7 +153,7 @@ class mCLIPTrainer(Trainer):
                     if i % self.evaluate_every == 0:
                         min_loss = self.check_save_model(loss, min_loss) 
                             
-                    losses.append(loss.item())
+                    losses.append(loss.sum().item())
                     
         return losses
     
