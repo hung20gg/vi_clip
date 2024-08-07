@@ -15,30 +15,28 @@ class Trainer:
         
         self.train_type = train_args['train_type']
         
-        if isinstance(self.model_args, dict):
-            self.model = build_model(model_args)
-            self.model_name = model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
-            self.model_name = self.model_name.replace('/','-')
-        else:
-            self.model = model_args
-            self.model_name = 'custom'
+        self.model_name = self.train_type + "_" + model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
+        self.model_name = self.model_name.replace('/','-')
+
         
             
         self.device = train_args['device']
         self.model.setup_training(device=self.device)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
         
         if self.train_type == 'ddp':
             torch.cuda.set_device(self.device)  # master gpu takes up extra memory
             torch.cuda.empty_cache()
-            self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids = [self.device])
+            self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids = [self.device], find_unused_parameters=True)
+            self
+           
+        else: 
             
-        elif self.train_type == 'dp':
-            self.model = torch.nn.DataParallel(self.model).to(self.device)
-        
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
+            self.model = build_model(model_args)
+            if self.train_type == 'dp':
+                self.model = torch.nn.DataParallel(self.model).to(self.device)
 
         self.epochs = self.train_args['epochs']
-
         self.batch_size = self.train_args['batch_size']
         
         self.dataloaders, self.samplers = get_dataloader(train_args, model_args) 

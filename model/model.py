@@ -8,6 +8,86 @@ from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPTe
 import gc
 
 
+class TextEncoder(nn.Module):
+    def __init__(self, model, device, model_type, projection_dim = 768, max_length = 64, init_scale = 10, init_bias = -10, ):
+        super(TextEncoder, self).__init__()
+        self.device = device
+        self.text_model = AutoModel.from_pretrained(model).to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True)
+        self.max_length = max_length
+        self.model_type = model_type
+        
+        if self.text_model.config.hidden_size != projection_dim:
+            self.text_projection = nn.Linear(self.text_model.config.hidden_size, projection_dim)
+        else:
+            self.text_projection = nn.Identity()
+        
+        if model_type == 'mse':
+            self.loss_fn = nn.MSELoss()
+        elif model_type == 'clip':
+            self.loss_fn = cliploss
+        else:
+            self.loss_fn = sigliploss
+            self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
+            self.logit_bias  = nn.Parameter(torch.ones(1) * init_bias)
+            
+        
+    def tokenize(self, text):
+        return self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
+    
+    def encode_text(self, text):
+        inputs = self.tokenize(text)
+        outputs = self.text_model(**inputs).last_hidden_state
+        emb_text = mean_pooling(outputs, inputs['attention_mask'])
+        emb_text = self.text_projection(emb_text)
+        emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
+        return emb_text / (emb_norm + 1e-8)
+    
+    def forward(self, texts: torch.Tensor, images: torch.Tensor):
+        # texts: y_pred, images: y_train
+        if self.model_type in ['clip', 'mse']:
+            return self.loss_fn(images, texts)
+        else:
+            return self.loss_fn(images, texts, self.logit_scale, self.logit_bias)
+    
+class LiT2:
+    def __init__(self, text_model, vision_model, device = None, max_length = 64, pretrain = True, **kwargs):
+        
+        if device is not None:
+            self.device = device
+        else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.text_model = TextEncoder(text_model, max_length, device=self.device)
+        self.vision_model = timm.create_model(
+                vision_model,
+                pretrained=pretrain,
+                num_classes=0,
+            ).to(self.device)
+
+        self.encode_text = self.text_model.encode_text
+        self.data_config = timm.data.resolve_data_config({}, model=self.vision_model)
+        self.processor = timm.data.create_transform(**self.data_config, is_training=False)
+        
+    def transform_image(self, image):
+        if isinstance(image, torch.Tensor):
+            return image
+        
+        if isinstance(image, list) and all(isinstance(i, str) for i in image):
+            image = np.array([open_image(i) for i in image])
+        
+        return self.processor(image)
+    
+    def encode_image(self, image):
+        image = self.transform_image(image).to(self.device)
+        if len(image.shape) == 3:
+            image = image.unsqueeze(0)
+        self.vision_model.eval()
+        with torch.no_grad():
+            output = self.vision_model(image)
+        emb_norm = torch.norm(output, dim=1, keepdim=True)
+        return output / (emb_norm + 1e-8)
+        
+
 class CLIP(nn.Module):
     def __init__(self, 
                  vision_model = 'vit_base_patch16_clip_224.dfn2b', #vit_base_patch16_clip_224.dfn2b
@@ -60,7 +140,8 @@ class CLIP(nn.Module):
         self.setup_device(device)
         self.train_vision = train_vision
         if not train_vision:
-            self.vision_model.requires_grad = False
+            for param in self.vision_model.parameters():
+                param.requires_grad = False
         self.train_text = train_text
         
     def setup_device(self, device = None):
@@ -102,22 +183,12 @@ class CLIP(nn.Module):
         if self.vision_source == 'timm':
             if len(image.shape) == 3:
                 image = image.unsqueeze(0)
-            if self.train_vision or train:
-                self.vision_model.train()
-                output = self.vision_model(image)
-            else:
-                self.vision_model.eval()
-                with torch.no_grad():
-                    output = self.vision_model(image)
+            self.vision_model.eval()
+            output = self.vision_model(image)
         
         else:
-            if self.train_vision or train:
-                self.vision_model.train()
-                output = self.vision_model(**image)
-            else:
-                self.vision_model.eval()
-                with torch.no_grad():
-                    output = self.vision_model(**image)
+            self.vision_model.eval()
+            output = self.vision_model(**image)
 
         emb_norm = torch.norm(output, dim=1, keepdim=True)
         return output / (emb_norm + 1e-8)
@@ -125,14 +196,7 @@ class CLIP(nn.Module):
     def encode_text(self, text, result = 'mean', train = False):
         
         inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
-        
-        if self.train_text or train:
-            self.text_model.train()
-            outputs = self.text_model(**inputs).last_hidden_state
-        else:
-            self.text_model.eval()
-            with torch.no_grad():
-                outputs = self.text_model(**inputs).last_hidden_state
+        outputs = self.text_model(**inputs).last_hidden_state
                 
         if result == 'eos':
             emb_text = outputs

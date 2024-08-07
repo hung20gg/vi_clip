@@ -4,12 +4,48 @@ import numpy as np
 from transformers import AutoTokenizer,  AutoProcessor, AutoModel, CLIPModel, SiglipModel
 from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPText
 from .lossfn import sigliploss, cliploss
+from .model import TextEncoder
 
 import gc
 
 
+class CrossLingual2:
+    def __init__(self, text_model, clip_model, device = None, max_length = 64 **kwargs):
 
+        if device is not None:
+            self.device = device
+        else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        
+        model = AutoModel.from_pretrained(clip_model)
+        if hasattr(model, 'projection_dim'):
+            self.projection_dim = model.projection_dim
+        else:
+            self.projection_dim = 768      
+            
+        self.clip_text_model = CLIPText(model)  
+        self.clip_tokenizer = AutoTokenizer.from_pretrained(clip_model, use_fast=True)
+        
+        del model
+        gc.collect()
+        try:
+            torch.cuda.empty_cache()
+        except:
+            print('No GPU available')
+            
+        self.text_model = TextEncoder(text_model, max_length, 'mse', projection_dim = self.projection_dim , device=self.device)
+        self.text_tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
+        self.encode_text = self.text_model.encode_text
+    def encode_clip_text(self, text):
+        inputs = self.clip_tokenizer(text=text, max_length = self.text_model.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
 
+        self.clip_text_model.eval()
+        outputs = self.clip_text_model(**inputs)
+                
+        emb_norm = torch.norm(outputs, dim=1, keepdim=True)
+        return outputs / (emb_norm + 1e-8)
+        
 class CrossLingual(nn.Module):
     def __init__(self,
                  clip_model = 'google/siglip-base-patch16-224',
@@ -74,9 +110,11 @@ class CrossLingual(nn.Module):
         self.train_text = train_text
         
         if self.vision and not self.train_vision:
-            self.vision_model.requires_grad_(False)
+            for param in self.vision_model.parameters():
+                param.requires_grad = False
         if not self.train_clip_text:
-            self.clip_text_model.requires_grad_(False)
+            for param in self.clip_text_model.parameters():
+                param.requires_grad = False
         
     def load_checkpoint(self, checkpoint):
         self.load_state_dict(torch.load(checkpoint))
@@ -103,35 +141,23 @@ class CrossLingual(nn.Module):
         
         return self.processor(image, return_tensors='pt').to(self.device)
 
-    def encode_image(self, image, train = False):
+    def encode_image(self, image):
         assert self.vision, 'Vision model is not loaded'
         
         image = self.transform_image(image)
         
-        if self.train_vision or train:
-            self.vision_model.train()
-            output = self.vision_model(**image)
-        else:
+        if not self.train_vision:
             self.vision_model.eval()
-            with torch.no_grad():
-                output = self.vision_model(**image)
+        output = self.vision_model(**image)
 
         emb_norm = torch.norm(output, dim=1, keepdim=True)
         return output / (emb_norm + 1e-8)
     
-    def encode_text(self, text, result = 'mean', train = False):
-        
+    def encode_text(self, text, result = 'mean'):
         inputs = self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
-        
-        if self.train_text or train:
-            self.text_model.train()
-            outputs = self.text_model(**inputs).last_hidden_state
-        else:
-            self.text_model.eval()
-            with torch.no_grad():
-                outputs = self.text_model(**inputs).last_hidden_state
-            
-                
+    
+        outputs = self.text_model(**inputs).last_hidden_state
+                    
         if result == 'eos':
             emb_text = outputs
             emb_text = emb_text[torch.arange(emb_text.shape[0]), torch.where(inputs['input_ids'] == self.tokenizer.eos_token_id)[1]]
@@ -143,16 +169,12 @@ class CrossLingual(nn.Module):
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)
     
-    def encode_clip_text(self, text, train = False):
+    def encode_clip_text(self, text):
         inputs = self.processor(text=text, max_length = self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
-        
-        if self.train_clip_text or train:
-            self.clip_text_model.train()
-            outputs = self.clip_text_model(**inputs)
-        else:
+
+        if not self.train_clip_text:
             self.clip_text_model.eval()
-            with torch.no_grad():
-                outputs = self.clip_text_model(**inputs)
+        outputs = self.clip_text_model(**inputs)
                 
         emb_norm = torch.norm(outputs, dim=1, keepdim=True)
         return outputs / (emb_norm + 1e-8)
@@ -194,9 +216,11 @@ class mCLIP(CrossLingual):
         self.train_text = train_text
         
         if self.vision and not self.train_vision:
-            self.vision_model.requires_grad_(False)
+            for param in self.vision_model.parameters():
+                param.requires_grad = False
         if not self.train_clip_text:
-            self.clip_text_model.requires_grad_(False)
+            for param in self.clip_text_model.parameters():
+                param.requires_grad = False
         
     def forward(self, image, text_1, text_2):
         assert self.vision, 'Vision model is not loaded'
