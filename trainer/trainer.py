@@ -77,7 +77,7 @@ class Trainer:
                     i+=1
                     self.optimizer.zero_grad()
                     loss = self.model(images, texts)
-                    loss.backward()
+                    loss.sum().backward()
                     self.optimizer.step()
                     self.scheduler.step()
                     if i % self.evaluate_every == 0:
@@ -118,7 +118,7 @@ class CrossLingualTrainer(Trainer):
                     i += 1
                     self.optimizer.zero_grad()
                     loss = self.model(texts_1, texts_2)
-                    loss.backward()
+                    loss.sum().backward()
                     self.optimizer.step()
                     self.scheduler.step()
                     
@@ -146,7 +146,7 @@ class mCLIPTrainer(Trainer):
                     i += 1
                     self.optimizer.zero_grad()
                     loss = self.model(images, texts_1, texts_2)
-                    loss.backward()
+                    loss.sum().backward()
                     self.optimizer.step()
                     self.scheduler.step()
                     
