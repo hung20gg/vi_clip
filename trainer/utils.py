@@ -3,6 +3,7 @@ import os
 import pandas as pd
 from torch.utils.data import DataLoader
 from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset
+from torch.utils.data.distributed import DistributedSampler
 
 def build_model(model_args):
         
@@ -52,13 +53,13 @@ def get_dataloader(train_args, model_args, train = True):
             dataset = mCLIPDataset(df, os.path.join(image_folder, data.split('/')[-1]))
         
         if is_ddp:
-            from torch.utils.data.distributed import DistributedSampler
+            # from torch.utils.data.distributed import DistributedSampler
             sampler = DistributedSampler(dataset)
             
-        if train and training_objective != 'crosslingual':
+        if train:
             dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = not is_ddp, sampler=sampler, num_workers = num_workers)
         else:
-            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = not is_ddp, num_workers = num_workers)
+            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False, num_workers = num_workers)
         
         dataloaders.append(dataloader)
         samplers.append(sampler)

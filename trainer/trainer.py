@@ -30,10 +30,9 @@ class Trainer:
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids = [self.device], find_unused_parameters=True)
             self
            
-        else: 
-            if self.train_type == 'dp':
+        elif self.train_type == 'dp':
                 self.model = torch.nn.DataParallel(self.model).to(self.device)
-
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
         self.epochs = self.train_args['epochs']
         self.batch_size = self.train_args['batch_size']
         
