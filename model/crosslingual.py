@@ -10,7 +10,7 @@ import gc
 
 
 class CrossLingual2:
-    def __init__(self, text_model, clip_model, device = None, max_length = 64 **kwargs):
+    def __init__(self, text_model, clip_model, device = None, max_length = 64, **kwargs):
 
         if device is not None:
             self.device = device
