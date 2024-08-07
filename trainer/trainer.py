@@ -4,6 +4,9 @@ from tqdm import tqdm
 
 from .utils import build_model, get_dataloader
 from .scheduler import linear_warmup_decay_scheduler, cosine_warmup_scheduler
+import torch.multiprocessing as mp
+from torch.distributed import init_process_group, destroy_process_group
+
 
 class Trainer:
     def __init__(self, model_args : dict, train_args : dict):
@@ -156,24 +159,19 @@ class mCLIPTrainer(Trainer):
                     losses.append(loss.sum().item())
                     
         return losses
-    
-    
-    
-def ddp_train(train_args, model_args):
-    import torch.multiprocessing as mp
-    from torch.distributed import init_process_group, destroy_process_group
 
+def ddp_setup(rank: int, world_size: int):
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "54321"  # select any idle port on your machine
 
-    # Each process control a single gpu
-    def ddp_setup(rank: int, world_size: int):
-        os.environ["MASTER_ADDR"] = "localhost"
-        os.environ["MASTER_PORT"] = "54321"  # select any idle port on your machine
-
-        init_process_group(backend="nccl", rank=rank, world_size=world_size)
-    
-    def main_ddp(
+    init_process_group(backend="nccl", rank=rank, world_size=world_size)
+        
+  
+def main_ddp(
     rank: int,
     world_size: int,
+    train_args: dict,
+    model_args: dict,
 ):
         ddp_setup(rank, world_size)  # initialize ddp
 
@@ -190,5 +188,10 @@ def ddp_train(train_args, model_args):
 
         destroy_process_group()
     
+    
+def ddp_train(train_args, model_args):
+
+    # Each process control a single gpu
+
     world_size = torch.cuda.device_count()
-    mp.spawn(main_ddp, args=(world_size), nprocs=world_size)
+    mp.spawn(main_ddp, args=(world_size, train_args, model_args), nprocs=world_size)
