@@ -15,10 +15,9 @@ class Trainer:
         
         self.train_type = train_args['train_type']
         
+        self.model = build_model(model_args)
         self.model_name = self.train_type + "_" + model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
         self.model_name = self.model_name.replace('/','-')
-
-        
             
         self.device = train_args['device']
         self.model.setup_training(device=self.device)
