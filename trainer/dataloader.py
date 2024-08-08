@@ -31,6 +31,22 @@ class ImageCaptionDataset(Dataset):
         label = self.descriptions[idx]
         return img, label
     
+class TensorCaptionDataset(Dataset):
+    def __init__(self, df, directory = ''):
+        """_summary_
+
+        Args:
+            df (_type_): DataFrame of the dataset
+            directory (_type_): _description_
+        """
+        super(TensorCaptionDataset, self).__init__()
+        self.df = df
+        self.imgs = df['image_path'].values
+        self.descriptions = df['caption'].values
+        
+        self.directory = directory
+        self.descriptions = []
+    
 class CrossLingualDataset(Dataset):
     def __init__(self, df ):
         """_summary_
