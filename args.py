@@ -60,6 +60,7 @@ def parse_to_train_model_eval_args(args):
         'model_type': args.model_type,
         'max_length': args.max_length,
         'pretrain': args.pretrain,
+        
     }
 
     eval_args = {
