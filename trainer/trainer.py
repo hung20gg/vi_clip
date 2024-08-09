@@ -13,7 +13,9 @@ class Trainer:
         self.model_args = model_args
         self.train_args = train_args
         
+        self.is_float16 = train_args.get('float16', False)
         self.train_type = train_args['train_type']
+        self.mix_precision = train_args.get('mix_precision', False) ^ self.is_float16
         self.device = train_args['device']
         
         self.model = build_model(model_args)
@@ -54,6 +56,9 @@ class Trainer:
                                                     self.train_args['warmup_steps'], 
                                                     self.len_dataloader * self.epochs, 
                                                     self.train_args['intial_lr'])
+        
+        if self.mix_precision:
+            self.scaler = torch.cuda.amp.GradScaler()
             
     def load_checkpoint(self, checkpoint):
         self.model.load_checkpoint(checkpoint['model_state_dict'])
@@ -61,6 +66,29 @@ class Trainer:
     def distributed_update(self, sampler, epoch):
         if self.train_type == 'ddp':
             sampler.set_epoch(epoch)
+        
+    def mini_batch_train(self, images=None, texts_1=None, texts_2=None):
+        self.optimizer.zero_grad()  
+        if self.mix_precision:
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                loss = self.forward_pass(images, texts_1, texts_2)
+                # loss = loss.sum() # sum() to make it a scalar
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            loss = self.forward_pass(images, texts_1, texts_2)
+            # loss = loss.sum()
+            loss.sum().backward()
+            self.optimizer.step()
+        return loss
+                
+    def forward_pass(self, images=None, texts_1=None, texts_2=None):
+        if texts_2 is None:
+            return self.model(images, texts_1)
+        if images is None:
+            return self.model(texts_1, texts_2)
+        return self.model(images, texts_1, texts_2)
         
     def train(self):
         # Not reporting the loss on WanDB
@@ -73,10 +101,7 @@ class Trainer:
                 self.distributed_update(sampler, epoch)
                 for images, texts in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i+=1
-                    self.optimizer.zero_grad()
-                    loss = self.model(images, texts)
-                    loss.sum().backward()
-                    self.optimizer.step()
+                    loss = self.mini_batch_train(images = images, texts_1=texts)
                     self.scheduler.step()
                     if i % self.evaluate_every == 0:
                         self.check_save_model(loss, min_loss)
@@ -114,10 +139,7 @@ class CrossLingualTrainer(Trainer):
                 self.distributed_update(sampler, epoch)
                 for texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
-                    self.optimizer.zero_grad()
-                    loss = self.model(texts_1, texts_2)
-                    loss.sum().backward()
-                    self.optimizer.step()
+                    loss = self.model(texts_1 = texts_1, texts_2 = texts_2)
                     self.scheduler.step()
                     
                     if i % self.evaluate_every == 0:
@@ -142,10 +164,7 @@ class mCLIPTrainer(Trainer):
                 self.distributed_update(sampler, epoch)
                 for images, texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
-                    self.optimizer.zero_grad()
-                    loss = self.model(images, texts_1, texts_2)
-                    loss.sum().backward()
-                    self.optimizer.step()
+                    loss = self.model(images = images, texts_1 = texts_1, texts_2 = texts_2)
                     self.scheduler.step()
                     
                     if i % self.evaluate_every == 0:
@@ -184,9 +203,12 @@ def main_ddp(
         destroy_process_group()
     
     
-def ddp_train(train_args, model_args):
+def ddp_train(train_args: dict, model_args: dict):
 
     # Each process control a single gpu
+    if train_args.get('accelerate') == True:
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
 
     world_size = torch.cuda.device_count()
     mp.spawn(main_ddp, args=(world_size, train_args, model_args), nprocs=world_size)

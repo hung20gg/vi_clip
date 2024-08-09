@@ -8,6 +8,7 @@ def parse_args():
     
     # Training arguments
     parser.add_argument('--train_type', type=str, default=training_args['train_type'], help='Training type')
+    parser.add_argument('--mix_precision', type=bool, default=training_args['mix_precision'], help='Mixed precision training')
     parser.add_argument('--device', type=str, default=training_args['device'], help='Device')
     parser.add_argument('--lr', type=float, default=training_args['lr'], help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=training_args['weight_decay'], help='Weight decay')
@@ -18,11 +19,12 @@ def parse_args():
     parser.add_argument('--peak_lr', type=float, default=training_args['peak_lr'], help='Peak learning rate')
     parser.add_argument('--intial_lr', type=float, default=training_args['intial_lr'], help='Initial learning rate')
     parser.add_argument('--num_workers', type=int, default=training_args['num_workers'], help='Number of workers')
-    # parser.add_argument('--training_objective', type=str, default=training_args['training_objective'], help='Training objective')
     parser.add_argument('--dataset', nargs='+', default=training_args['dataset'], help='Datasets')
     parser.add_argument('--image_folder', type=str, default=training_args['image_folder'], help='Image folder')
     parser.add_argument('--save_dir', type=str, default=training_args['save_dir'], help='Save directory')
-    parser.add_argument('--beta2', type=float, default=training_args['beta2'], help='Beta2')
+    parser.add_argument('--beta2', type=float, default=training_args['beta2'], help='Beta2 of AdamW')
+    
+    parser.add_argument('--accelerate', type=bool, default=training_args['accelerate'], help='Accelerate training on Ampere GPUs')
     
     # Model arguments
     parser.add_argument('--text_model', type=str, default=model_args['text_model'], help='Text encoder model')
