@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 def delete_cache_files(local_directory, repo_name):
     lock_file = os.path.join(local_directory, ".lock")
-    dataset_cache = os.path.join(local_directory, f'dataset--{repo_name.replace('/', '--')}')
+    dataset_cache = os.path.join(local_directory, f"dataset--{repo_name.replace('/', '--')}")
     
     if os.path.exists(lock_file):
         try:
