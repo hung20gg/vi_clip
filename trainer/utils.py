@@ -28,7 +28,6 @@ def build_model(model_args):
 def get_dataloader(train_args, model_args, train = True): 
     # Get lists of dataloader for each dataset
     datasets = train_args['dataset']
-    image_folder = train_args['image_folder']
     training_objective = model_args['model_type']
     batch_size = train_args['batch_size']
     num_workers = train_args['num_workers']
@@ -42,15 +41,21 @@ def get_dataloader(train_args, model_args, train = True):
         datasets = [datasets]
     
     for data in datasets:
-        df = pd.read_parquet(f'{data}.parquet')
+        df = None
+        
+        for file in os.listdir(data):
+            if file.endswith('.parquet'):
+                df = pd.read_parquet(os.path.join(data, file))
+        assert df is not None, "No parquet file found in the directory"
+        
         if training_objective in ['clip','siglip','lit','siglit']:
-            dataset = ImageCaptionDataset(df, os.path.join(image_folder, data.split('/')[-1]))
-            sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
+            dataset = ImageCaptionDataset(df, os.path.join(data, 'images'))
+            # sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
         elif training_objective == 'crosslingual':
             
             dataset = CrossLingualDataset(df)
         else:
-            dataset = mCLIPDataset(df, os.path.join(image_folder, data.split('/')[-1]))
+            dataset = mCLIPDataset(df, os.path.join(data, 'images'))
         
         if is_ddp:
             # from torch.utils.data.distributed import DistributedSampler

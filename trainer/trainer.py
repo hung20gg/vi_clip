@@ -15,7 +15,9 @@ class Trainer:
         
         self.is_float16 = train_args.get('float16', False)
         self.train_type = train_args['train_type']
-        self.mix_precision = train_args.get('mix_precision', False) ^ self.is_float16
+        self.mix_precision = train_args.get('mix_precision', False) and not self.is_float16
+        self.mix_precision = self.mix_precision and not train_args.get('accelerate', False)
+        
         self.device = train_args['device']
         
         self.model = build_model(model_args)
@@ -89,6 +91,7 @@ class Trainer:
         if images is None:
             return self.model(texts_1, texts_2)
         return self.model(images, texts_1, texts_2)
+    
         
     def train(self):
         # Not reporting the loss on WanDB
@@ -139,7 +142,7 @@ class CrossLingualTrainer(Trainer):
                 self.distributed_update(sampler, epoch)
                 for texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
-                    loss = self.model(texts_1 = texts_1, texts_2 = texts_2)
+                    loss = self.mini_batch_train(texts_1 = texts_1, texts_2 = texts_2)
                     self.scheduler.step()
                     
                     if i % self.evaluate_every == 0:
@@ -164,7 +167,7 @@ class mCLIPTrainer(Trainer):
                 self.distributed_update(sampler, epoch)
                 for images, texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
-                    loss = self.model(images = images, texts_1 = texts_1, texts_2 = texts_2)
+                    loss = self.mini_batch_train(images = images, texts_1 = texts_1, texts_2 = texts_2)
                     self.scheduler.step()
                     
                     if i % self.evaluate_every == 0:
@@ -201,6 +204,7 @@ def main_ddp(
         losses = trainer.train()
 
         destroy_process_group()
+        return losses
     
     
 def ddp_train(train_args: dict, model_args: dict):
