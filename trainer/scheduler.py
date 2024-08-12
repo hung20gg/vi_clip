@@ -6,7 +6,7 @@ def linear_warmup_decay_scheduler(optimizer, warmup_steps, total_steps, initial_
     def lr_lambda(current_step):
         if current_step < warmup_steps:
             # Linear warmup
-            return initial_lr*1e-4 + float(current_step) / float(max(1, warmup_steps)) * (peak_lr - initial_lr*1e-4)
+            return float(current_step) / float(max(1, warmup_steps)) * peak_lr
         else:
             # Linear decay
             return peak_lr - (peak_lr - initial_lr) * (float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps - 1)))

@@ -50,12 +50,14 @@ def download_and_extract_batches(repo_name, local_directory, ending='.tar.gz'):
     
     for parquet_file in tqdm(parquet_files, desc="Downloading parquet files"):
         # Download the parquet file
-        hf_hub_download(
+        parquet_path = hf_hub_download(
             repo_id=repo_name,
             filename=parquet_file,
             repo_type="dataset",
             cache_dir=local_directory
         )
+        
+        shutil.move(parquet_path, os.path.join(local_directory, 'captions.parquet'))
 
     for tar_file in tqdm(tar_files, desc="Downloading and extracting batches"):
         # Create a temporary directory for this batch
