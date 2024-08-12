@@ -7,6 +7,8 @@ from trainer import build_model
 
 def get_dataset(name, directory = 'data/evaluate'):
     
+    # Not clarify how the data is stored, but we can assume that the data is stored in parquet format
+    
     # Get 3 different datasets: image_text, image_text_id, image_id_text
     image_text = pd.read_parquet(f'{directory}/{name}/image_text.parquet')
     image_text['image_id'] = pd.factorize(image_text['image'])[0]
@@ -63,7 +65,8 @@ class EvaluateModel:
             self.device = device
         else:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            
+           
+        # passing model, either through args or directly 
         if isinstance(model_args, dict):
             self.model = build_model(model_args)
             if model_args['checkpoint'] is not None:
@@ -107,7 +110,7 @@ class EvaluateModel:
         
         img_text_scores, text_img_scores = get_top_matches(image_embeddings, text_embeddings, top_k)
         return img_text_scores, text_img_scores
-        # Calculate Acc@K k = 1, 5
+
         
     def zero_shot_classification(self):
         img_text_scores, text_img_scores = self._evaluate(top_k=1)

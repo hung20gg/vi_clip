@@ -3,6 +3,14 @@ from trainer import Trainer, CrossLingualTrainer, mCLIPTrainer
 from evaluate.eval_retrieval import EvaluateModel
 import argparse
 
+###############################################
+#
+# This file is used if using bash command to 
+# train the model. But there are problems with 
+# import libraries.
+#
+################################################
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Training Script')
     

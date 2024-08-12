@@ -5,10 +5,15 @@ from .lossfn import sigliploss, cliploss
 from transformers import AutoTokenizer, AutoModel, AutoProcessor, CLIPImageProcessor
 import timm
 from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPText
+from collections.abc import Iterable 
 import gc
 
 
 class TextEncoder(nn.Module):
+    """
+    Testing: New approach for training text encoder.
+    No need to load the vision model, passing the embedding directly to the model.
+    """
     def __init__(self, model, device, model_type, projection_dim = 768, max_length = 64, init_scale = 10, init_bias = -10, ):
         super(TextEncoder, self).__init__()
         self.device = device
@@ -89,6 +94,15 @@ class LiT2:
         
 
 class CLIP(nn.Module):
+    """
+
+    Main class for CLIP-based models.
+    
+    The vision model can be loaded from timm or huggingface.
+    The text tower is always loaded from huggingface. There will be an adaptive projection layer 
+        for the text tower (if the dimension of the text tower is different from the projection dimension).
+    
+    """
     def __init__(self, 
                  vision_model = 'vit_base_patch16_clip_224.dfn2b', #vit_base_patch16_clip_224.dfn2b
                  text_model = 'vinai/phobert-base-v2', 
@@ -96,14 +110,25 @@ class CLIP(nn.Module):
                  pretrain = True,
                  projection_dim = 768,
                  max_length = 64,
+                 is_load = True,
                  **kwargs):
         super(CLIP, self).__init__()
 
         self.loss_fn = cliploss
-
-        print('Loading vision model')
         self.vision_source = vision_source
-        if vision_source == 'timm':
+        
+        self.train_text = False
+        self.train_vision = False
+        
+        self.max_length = max_length
+        if is_load:
+            self.load_model(vision_model, text_model, pretrain, projection_dim)
+            
+        
+    def load_model(self, vision_model, text_model, pretrain, projection_dim):
+        print('Loading vision model')
+        
+        if self.vision_source == 'timm':
             self.vision_model = timm.create_model(
                 vision_model,
                 pretrained=pretrain,
@@ -125,16 +150,11 @@ class CLIP(nn.Module):
         
         print(f'Number of vision model parameters: {count_parameters(self.vision_model)}')
         
-        self.train_text = False
-        self.train_vision = False
-        
         print('Loading text model')
         self.text_model = AutoModel.from_pretrained(text_model)
         self.tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
         print(f'Number of text model parameters: {count_parameters(self.text_model)}')
         
-        self.max_length = max_length
-        self.to(self.device)
     
     def setup_training(self, train_vision = True, train_text = True, device = None):
         self.setup_device(device)
@@ -171,15 +191,15 @@ class CLIP(nn.Module):
             self.text_model.save_pretrained(path)
          
     def transform_image(self, images):
-        if isinstance(image, torch.Tensor):
-            return image
+        if isinstance(images, torch.Tensor):
+            return images
         
-        if all(isinstance(i, str) for i in images):
+        if isinstance(images, Iterable) and all(isinstance(i, str) for i in images):
             images = np.array([open_image(i) for i in images])
         
         if self.vision_source == 'timm':
             return self.processor(images)
-        return self.processor(images, return_tensors='pt')
+        return self.processor(images = images, return_tensors='pt')
 
         
     def encode_image(self, images):
@@ -194,7 +214,7 @@ class CLIP(nn.Module):
             self.vision_model.eval()
             output = self.vision_model(**images)
 
-        emb_norm = torch.norm(output, dim=1, keepdim=True)
+        emb_norm = torch.norm(output, dim=-1, keepdim=True)
         return output / (emb_norm + 1e-8)
     
     def encode_text(self, texts, result = 'mean'):
@@ -227,6 +247,7 @@ class CLIP(nn.Module):
     
 
 class SigLIP(CLIP):
+    """ Similar to CLIP but with a different loss function."""
     def __init__(self, 
                  init_scale = 10,
                  init_bias = -10,
@@ -244,6 +265,7 @@ class SigLIP(CLIP):
         return self.loss_fn(image_embed, text_embed, self.logit_scale, self.logit_bias)
     
 class LiT(CLIP):
+    """ CLIP but freeze the vision model by default."""
     def __init__(self, **kwargs):
         super(LiT, self).__init__(**kwargs)
         
@@ -253,6 +275,7 @@ class LiT(CLIP):
         self.train_text = train_text
         
 class SigLiT(SigLIP):
+    """ SigLIP but freeze the vision model by default."""
     def __init__(self, **kwargs):
         super(SigLiT, self).__init__(**kwargs)
         

@@ -1,21 +1,26 @@
+
+""" 
+    Default arguments for training, model and evaluation
+    
+"""
 training_args = {
-    'train_type':'single',
+    'train_type':'single', # 'single', 'ddp' or 'dp'
     'mix_precision': False,
     'device': 'cuda',
     'lr': 5e-4,
     'weight_decay': 1e-3,
     'epochs': 10,
     'batch_size': 2048,
-    'scheduler': 'cosine',
+    'scheduler': 'cosine', # 'cosine' or 'linear'
     'warmup_steps': 500,
     'peak_lr': 1,
     'intial_lr': 0.01,
-    'num_workers': -1,
-    'dataset': ['data/dfn_20', 'data/image_caption', 'data/sharegpt4v','data/wit'],
-    'image_folder': 'data/images',
+    'num_workers': 6,
+    'dataset': ['data/dfn_20', 'data/image_caption', 'data/sharegpt4v','data/wit'], # Directory of the dataset
+    'image_folder': 'data/images', # Prefix for image folder (ignore for now)
     'save_dir': 'checkpoints/text_model_base',
     'evaluate_every': 200,
-    'beta2': 0.999
+    'beta2': 0.999 # On siglip, 0.95 is used
 }
 
 model_args = {
@@ -30,7 +35,7 @@ model_args = {
 eval_args = {
     'is_eval': True,
     'batch_size': 2048,
-    'num_workers': -1,
+    'num_workers': 6,
     'dataset': ['imagenet1k'],
 }
 

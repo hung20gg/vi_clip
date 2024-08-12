@@ -1,29 +1,44 @@
 import torch 
 import numpy as np
-from transformers import AutoModel, AutoProcessor
-from .utils import open_image
+from transformers import AutoModel, AutoProcessor, AutoTokenizer
+from .utils import open_image, CLIPImage, CLIPText
+from .lossfn import cliploss, sigliploss
+from .model import CLIP
+import gc
 
-class BaselineCLIP:
-    def __init__(self, model_name, device = None):
+class BaselineCLIP(CLIP):
+    """
+        Implementation of the Baseline CLIP model.
+
+    """
+    def __init__(self, clip_model, **kwargs):
+        super().__init__(is_load= False, **kwargs)
+        self.model_name = clip_model
+        self.vision_source = 'huggingface'
         
-        if device is None:
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        else:
-            self.device = device
+        # Maximum length of the clip text. 
+        self.max_length = 77
         
-        self.model_name = model_name
-        self.model = AutoModel.from_pretrained(model_name).to(self.device)
-        self.processor = AutoProcessor.from_pretrained(model_name)
-    
-       
+        model = AutoModel.from_pretrained(clip_model)
+        self.text_model = CLIPText(model)
+        self.vision_model = CLIPImage(model)
+        del model
+        gc.collect()
+        try:
+            torch.cuda.empty_cache()
+        except:
+            print('No GPU available')
+            
+        self.processor = AutoProcessor.from_pretrained(clip_model)
+        self.tokenizer = AutoTokenizer.from_pretrained(clip_model)
         
-    def encode(self, images, texts):
-        if all(isinstance(i, str) for i in images):
-            image = np.array([open_image(i) for i in image])
-        inputs = self.processor(text = texts, images = images , return_tensors = 'pt', padding = True, truncation = True).to(self.device)
-        outputs = self.model(**inputs)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.to(self.device)
         
-        text_emb = outputs.text_embeds.pooler_output
-        image_emb = outputs.image_embeds.pooler_output
-        
-        return image_emb, text_emb
+class BaselineSigLIP(BaselineCLIP):
+    """
+        Implementation of the Baseline SigLIP model.
+    """
+    def __init__(self, clip_model, **kwargs):
+        super().__init__(is_load= False, clip_model=clip_model, **kwargs)
+        self.loss_fn = sigliploss

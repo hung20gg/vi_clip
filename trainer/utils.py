@@ -1,4 +1,4 @@
-from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP
+from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP, BaselineCLIP
 import os
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -6,6 +6,14 @@ from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, m
 from torch.utils.data.distributed import DistributedSampler
 
 def build_model(model_args):
+    """Build model based on the model_args
+
+    Args:
+        model_args (dict): model arguments
+
+    Returns:
+        nn.Module: return the model based on the model_args. If not found, raise ValueError
+    """
         
     model_type = model_args['model_type']
     
@@ -21,12 +29,29 @@ def build_model(model_args):
         model = SigLiT(**model_args)
     elif model_type.lower() == 'crosslingual':
         model = CrossLingual(**model_args)
-    else:
+    elif model_type.lower() == 'mclip':
         model = mCLIP(**model_args)
+    elif model_type.lower() == 'baseline':
+        model = BaselineCLIP(**model_args)
+    else:
+        raise ValueError(f"Model type {model_type} not found")
+    
     return model
 
 def get_dataloader(train_args, model_args, train = True): 
     # Get lists of dataloader for each dataset
+    """
+    Create list of dataloaders and samplers for each dataset.
+
+    Args:
+        train_args (dict): args for training
+        model_args (dict): args for model
+        train (bool, optional): adding shuffle for training. Defaults to True.
+
+    Returns:
+        list[(Dataloader, Sampler)]: Return list of dataloader and sampler for each dataset.
+            If the training is not distributed, the sampler will be None.
+    """
     datasets = train_args['dataset']
     training_objective = model_args['model_type']
     batch_size = train_args['batch_size']

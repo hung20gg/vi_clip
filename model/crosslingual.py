@@ -47,6 +47,12 @@ class CrossLingual2:
         return outputs / (emb_norm + 1e-8)
         
 class CrossLingual(nn.Module):
+    """
+    
+        Training BERT-based text model using CLIP/SigLIP text tower, using MSE loss.
+        The implementation is similar to the CLIP class in the model.py file.
+
+    """
     def __init__(self,
                  clip_model = 'google/siglip-base-patch16-224',
                  text_model = 'vinai/phobert-base-v2',
@@ -198,6 +204,14 @@ class CrossLingual(nn.Module):
         return self.loss_fn(y_pred, y_true)
     
 class mCLIP(CrossLingual):
+    """
+        mCLIP model implementation.
+        mCLIP is a model that uses two different text embeddings to calculate the loss.
+        - IT loss: Image to New Text loss (CLIP loss)
+        - TT loss: Text to Text loss (CLIP loss)
+        
+        Loss = IT_loss + lambda * TT_loss (usually lambda = 0.1)
+    """
     def __init__(self,
                  clip_model = 'google/siglip-base-patch16-224',
                  text_model = 'vinai/phobert-base-v2',
