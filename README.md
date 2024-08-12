@@ -58,15 +58,19 @@ And these methods:
 - encode_text() str, list[str]
 - forward(images, texts) same as those 2
 
-Need changing in model design:
+Need changing:
 
 - Only include text encoder
 - Adding text projection layer (nn.Linear) even if both ViT and BERT embedding share the same dimension.
 - Implementation for freezing BERT and only train projection layer in some early epoch + different learning rate.
+- Test the `Evaluate` class
+- Pre-embedding, upload and download scripts (file must be in some order idk)
 
 ### Download the dataset
 
 import the `download_and_extract_batches` from `vi_clip.preprocess`, passing hf repo and local dir, it will download the repo (include image) in this structure
+
+(These are some bugs at the moment, so hehe)
 
 ```
 \dataset_name
