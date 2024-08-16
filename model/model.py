@@ -14,7 +14,7 @@ class TextEncoder(nn.Module):
     Testing: New approach for training text encoder.
     No need to load the vision model, passing the embedding directly to the model.
     """
-    def __init__(self, model, device, model_type, projection_dim = 768, max_length = 64, init_scale = 10, init_bias = -10, ):
+    def __init__(self, model, device, model_type, projection_dim = 768, max_length = 64, init_scale = 10, init_bias = -10):
         super(TextEncoder, self).__init__()
         self.device = device
         self.text_model = AutoModel.from_pretrained(model).to(self.device)
@@ -111,12 +111,13 @@ class CLIP(nn.Module):
                  projection_dim = 768,
                  max_length = 64,
                  is_load = True,
+                 force_text_projection = True,
                  **kwargs):
         super(CLIP, self).__init__()
 
         self.loss_fn = cliploss
         self.vision_source = vision_source
-        
+        self.force_text_projection = force_text_projection
         self.train_text = False
         self.train_vision = False
         
@@ -155,15 +156,27 @@ class CLIP(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
         print(f'Number of text model parameters: {count_parameters(self.text_model)}')
         
+        if self.text_model.config.hidden_size != projection_dim or self.force_text_projection:
+            self.force_text_projection = True
+            self.text_projection = nn.Linear(self.text_model.config.hidden_size, projection_dim)
+        
     
     def setup_training(self, train_vision = True, train_text = True, device = None):
         self.setup_device(device)
+        
+        # Freeze vision model
         self.train_vision = train_vision
         if not train_vision:
             print('Freezing vision model')
             for param in self.vision_model.parameters():
                 param.requires_grad = False
+                
+        # Freeze text model, only train the projection layer
         self.train_text = train_text
+        if not train_text:
+            print('Freezing text model')
+            for param in self.text_model.parameters():
+                param.requires_grad = False
         
         num_params = count_parameters(self)
         print(f'Number of parameters: {num_params}')
@@ -228,6 +241,9 @@ class CLIP(nn.Module):
         
         else:
             emb_text = mean_pooling(outputs, inputs['attention_mask'])
+            
+        if self.force_text_projection:
+            emb_text = self.text_projection(emb_text)
         
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)

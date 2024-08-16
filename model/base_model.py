@@ -42,3 +42,6 @@ class BaselineSigLIP(BaselineCLIP):
     def __init__(self, clip_model, **kwargs):
         super().__init__(is_load= False, clip_model=clip_model, **kwargs)
         self.loss_fn = sigliploss
+        
+        
+# CLIP model change the embedding layer to new vocab.

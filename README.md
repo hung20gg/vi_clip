@@ -5,7 +5,7 @@ File structure
 	dataloader.py
 	trainer.py
 \model
-	baseline_model.py
+	base_model.py
 	crosslingual.py
 	lossfn.py
 	...
@@ -65,6 +65,7 @@ Need changing:
 - Implementation for freezing BERT and only train projection layer in some early epoch + different learning rate.
 - Test the `Evaluate` class
 - Pre-embedding, upload and download scripts (file must be in some order idk)
+- Only change the embedding layer with new vocab (which dataset to change the vocab ??)
 
 ### Download the dataset
 
@@ -79,3 +80,11 @@ import the `download_and_extract_batches` from `vi_clip.preprocess`, passing hf 
 		1.jpg
 		2.jpg
 ```
+**Data format**
+The parquet file should be like this
+
+| image_id | image | text_id | caption |
+|----------|--------|--------|----------|
+| 000001 | name.jpg| 005| giám đốc |
+
+

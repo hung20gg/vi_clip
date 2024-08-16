@@ -7,7 +7,7 @@ from PIL import Image
 
 class ImageCaptionDataset(Dataset):
     def __init__(self, df, directory = ''):
-        """_summary_
+        """Dataset for image captioning
 
         Args:
             df (_type_): DataFrame of the dataset
@@ -16,7 +16,7 @@ class ImageCaptionDataset(Dataset):
         super(ImageCaptionDataset, self).__init__()
         self.df = df
         self.images_id = df['image_id'].values
-        self.imgs = df['image_path'].values
+        self.imgs = df['image'].values
         self.descriptions = df['caption'].values
         
         self.directory = directory
@@ -27,26 +27,27 @@ class ImageCaptionDataset(Dataset):
 
     def __getitem__(self, idx):
         img_dir = self.imgs[idx]
-        img = Image.open(os.path.join(self.directory, img_dir))
+        img = Image.open(os.path.join(self.directory, 'images', img_dir))
         label = self.descriptions[idx]
         return img, label
-    
+
 class TensorCaptionDataset(Dataset):
     def __init__(self, df, directory = ''):
-        """_summary_
+        """Dataset with preprocessed embeddings
 
         Args:
             df (_type_): DataFrame of the dataset
             directory (_type_): _description_
         """
         super(TensorCaptionDataset, self).__init__()
-        self.df = df
-        self.imgs = df['image_path'].values
+        # self.df = df
+        self.directory = directory
+        self.imgs = np.load(os.path.join(directory, 'images.npy'))
         self.descriptions = df['caption'].values
         
-        self.directory = directory
-        self.descriptions = []
-    
+    def __getitem__(self, index):
+        return self.imgs[index], self.descriptions[index]
+
 class CrossLingualDataset(Dataset):
     def __init__(self, df ):
         """_summary_
@@ -65,6 +66,7 @@ class CrossLingualDataset(Dataset):
     def __getitem__(self, idx):
         return self.original_text[idx], self.translated_text[idx]
     
+
 class mCLIPDataset(Dataset):
     def __init__(self, df , directory = ''):
         """_summary_
@@ -77,7 +79,7 @@ class mCLIPDataset(Dataset):
         
         self.directory = directory
         self.images_id = df['image_id'].values
-        self.imgs = df['image_path'].values
+        self.imgs = df['image'].values
         self.original_text = df['text'].values
         self.translated_text = df['translated_text'].values
         assert len(self.original_text) == len(self.translated_text), "Original and translated text must have the same length"
@@ -87,7 +89,7 @@ class mCLIPDataset(Dataset):
     
     def __getitem__(self, idx):
         img_dir = self.imgs[idx]
-        img = Image.open(os.path.join(self.directory, img_dir))
+        img = Image.open(os.path.join(self.directory, 'images', img_dir))
         return img, self.original_text[idx], self.translated_text[idx]
     
 class CLIPSampler(BatchSampler):

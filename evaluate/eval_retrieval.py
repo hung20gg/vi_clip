@@ -5,22 +5,22 @@ from tqdm import tqdm
 from PIL import Image
 from trainer import build_model
 
-def get_dataset(name, directory = 'data/evaluate'):
+def get_dataset(directory = 'data/evaluate/imagenet'):
     
     # Not clarify how the data is stored, but we can assume that the data is stored in parquet format
     
     # Get 3 different datasets: image_text, image_text_id, image_id_text
-    image_text = pd.read_parquet(f'{directory}/{name}/image_text.parquet')
+    image_text = pd.read_parquet(f'{directory}/image_text.parquet')
     image_text['image_id'] = pd.factorize(image_text['image'])[0]
-    image_text['text_id'] = pd.factorize(image_text['text'])[0]
+    image_text['text_id'] = pd.factorize(image_text['caption'])[0]
     
-    text_df = image_text[['text_id', 'text']].drop_duplicates()
+    text_df = image_text[['text_id', 'caption']].drop_duplicates()
     image_df = image_text[['image_id', 'image']].drop_duplicates()
     
     text_df.sort_values('text_id', inplace=True)
     image_df.sort_values('image_id', inplace=True)
 
-    image_df['image'] = image_df['image'].apply(lambda x: f'{directory}/{name}/images/{x}')
+    image_df['image'] = image_df['image'].apply(lambda x: f'{directory}/images/{x}')
 
     return {
         'images': image_df,
@@ -106,13 +106,15 @@ class EvaluateModel:
     
     def _evaluate(self, top_k = 5):
         image_embeddings = self._encode_image(self.dataset['images']['image'].values)
-        text_embeddings = self._encode_text(self.dataset['texts']['text'].values)
+        text_embeddings = self._encode_text(self.dataset['texts']['caption'].values)
         
         img_text_scores, text_img_scores = get_top_matches(image_embeddings, text_embeddings, top_k)
         return img_text_scores, text_img_scores
 
         
     def zero_shot_classification(self):
+        # Evaluate zero-shot classification accuracy
+        # Using the top 1 match image-text retrieval
         img_text_scores, text_img_scores = self._evaluate(top_k=1)
         image_text = self.dataset['image_text'].sort_values('image_id')
         
@@ -142,12 +144,14 @@ class EvaluateModel:
         len_text = len(self.dataset['texts'])
         len_img = len(self.dataset['images'])
         
+        # Retrieval for text to image
         for i in range(len_text):
             relevant_images = self.get_relevant_items(i, 'text')
             retrieved_images_k = set(text_img[i,:top_k])
             text_img_recall_k += len(relevant_images & retrieved_images_k) / min(len(retrieved_images_k),top_k)
             text_img_recall_1 += 1 if text_img[i,0] in relevant_images else 0
             
+        # Retrieval for image to text
         for i in range(len_img):
             relevant_texts = self.get_relevant_items(i, 'image')
             retrieved_texts_k = set(img_text[i,:top_k])
