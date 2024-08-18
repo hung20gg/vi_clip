@@ -21,7 +21,15 @@ class Trainer:
         self.device = train_args['device']
         
         self.model = build_model(model_args)
-        self.model.setup_training(device=self.device)
+        if self.is_float16:
+            self.model.half()
+        
+        self.train_projection = model_args.get('force_text_projection', False)
+        self.text_projection_iters = train_args.get('text_projection_iters', 1000)
+        if self.train_projection:
+            self.model.setup_training(train_text=False, device=self.device)
+        else:
+            self.model.setup_training(device=self.device)
         
         self.model_name = self.train_type + "_" + model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
         self.model_name = self.model_name.replace('/','-')
@@ -31,8 +39,10 @@ class Trainer:
         if self.train_type == 'ddp':
             torch.cuda.set_device(self.device)  # master gpu takes up extra memory
             torch.cuda.empty_cache()
-            self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids = [self.device], find_unused_parameters=True)
-            self
+            self.model = torch.nn.parallel.DistributedDataParallel(self.model, 
+                                                                   device_ids = [self.device], 
+                                                                   find_unused_parameters=True,
+                                                                   mixed_precision=self.mix_precision)
            
         elif self.train_type == 'dp':
                 self.model = torch.nn.DataParallel(self.model).to(self.device)
@@ -62,8 +72,7 @@ class Trainer:
         if self.mix_precision:
             self.scaler = torch.cuda.amp.GradScaler()
             
-        self.train_projection = model_args.get('force_text_projection', False)
-        self.text_projection_iters = train_args.get('text_projection_iters', 1000)
+
             
     def load_checkpoint(self, checkpoint):
         self.model.load_checkpoint(checkpoint['model_state_dict'])
@@ -72,28 +81,32 @@ class Trainer:
         if self.train_type == 'ddp':
             sampler.set_epoch(epoch)
         
-    def mini_batch_train(self, images=None, texts_1=None, texts_2=None):
+    def _mini_batch_train(self, images=None, texts_1=None, texts_2=None):
         self.optimizer.zero_grad()  
         if self.mix_precision:
             with torch.autocast(device_type='cuda', dtype=torch.float16):
-                loss = self.forward_pass(images, texts_1, texts_2)
+                loss = self._forward_pass(images, texts_1, texts_2)
                 # loss = loss.sum() # sum() to make it a scalar
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
-            loss = self.forward_pass(images, texts_1, texts_2)
+            loss = self._forward_pass(images, texts_1, texts_2)
             # loss = loss.sum()
             loss.sum().backward()
             self.optimizer.step()
         return loss
                 
-    def forward_pass(self, images=None, texts_1=None, texts_2=None):
+    def _forward_pass(self, images=None, texts_1=None, texts_2=None):
         if texts_2 is None:
             return self.model(images, texts_1)
         if images is None:
             return self.model(texts_1, texts_2)
         return self.model(images, texts_1, texts_2)
+    
+    def _unfreeze_text(self):
+        self.train_projection = False
+        pass
     
         
     def train(self):
@@ -107,17 +120,23 @@ class Trainer:
                 self.distributed_update(sampler, epoch)
                 for images, texts in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i+=1
-                    loss = self.mini_batch_train(images = images, texts_1=texts)
+                    loss = self._mini_batch_train(images = images, texts_1=texts)
                     self.scheduler.step()
                     if i % self.evaluate_every == 0:
                         self.check_save_model(loss, min_loss)
+                    
+                    if self.train_projection and i > self.text_projection_iters:
+                        self._unfreeze_text()
 
                     losses.append(loss.item())
         return losses
     
     def save_checkpoint(self):
         if not self.model.train_vision:
-            self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}.pth'))
+            if self.train_projection:
+                self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
+            else:
+                self.model.save_projection_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
         else:
             self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
     
@@ -145,7 +164,7 @@ class CrossLingualTrainer(Trainer):
                 self.distributed_update(sampler, epoch)
                 for texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
-                    loss = self.mini_batch_train(texts_1 = texts_1, texts_2 = texts_2)
+                    loss = self._mini_batch_train(texts_1 = texts_1, texts_2 = texts_2)
                     self.scheduler.step()
                     
                     if i % self.evaluate_every == 0:
@@ -170,7 +189,7 @@ class mCLIPTrainer(Trainer):
                 self.distributed_update(sampler, epoch)
                 for images, texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
-                    loss = self.mini_batch_train(images = images, texts_1 = texts_1, texts_2 = texts_2)
+                    loss = self._mini_batch_train(images = images, texts_1 = texts_1, texts_2 = texts_2)
                     self.scheduler.step()
                     
                     if i % self.evaluate_every == 0:

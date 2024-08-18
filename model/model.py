@@ -7,6 +7,7 @@ import timm
 from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPText
 from collections.abc import Iterable 
 import gc
+import os
 
 
 class TextEncoder(nn.Module):
@@ -160,28 +161,31 @@ class CLIP(nn.Module):
             self.force_text_projection = True
             self.text_projection = nn.Linear(self.text_model.config.hidden_size, projection_dim)
         
-    
-    def setup_training(self, train_vision = True, train_text = True, device = None):
-        self.setup_device(device)
-        
-        # Freeze vision model
+    def _setup_training(self, train_vision, train_text):
         self.train_vision = train_vision
         if not train_vision:
             print('Freezing vision model')
-            for param in self.vision_model.parameters():
-                param.requires_grad = False
+        for param in self.vision_model.parameters():
+            param.requires_grad = train_vision
                 
         # Freeze text model, only train the projection layer
         self.train_text = train_text
         if not train_text:
             print('Freezing text model')
-            for param in self.text_model.parameters():
-                param.requires_grad = False
+        for param in self.text_model.parameters():
+            param.requires_grad = train_text
         
         num_params = count_parameters(self)
         print(f'Number of parameters: {num_params}')
         
-    def setup_device(self, device = None):
+    
+    def setup_training(self, train_vision = True, train_text = True, device = None):
+        self._setup_device(device)
+        self._setup_training(train_vision, train_text)
+        # Freeze vision model
+
+        
+    def _setup_device(self, device = None):
         if device is not None:
             self.device = device
         else:
@@ -199,9 +203,14 @@ class CLIP(nn.Module):
         
     def save_text_checkpoint(self, path, using_automodel = True):
         if not using_automodel:
-            torch.save(self.text_model.state_dict(), path)
+            torch.save(self.text_model.state_dict(), os.path.join(path, 'text_model.pth'))
         else:
             self.text_model.save_pretrained(path)
+        self.save_projection_checkpoint(path)
+         
+    def save_projection_checkpoint(self, path):
+        if hasattr(self, 'text_projection'):
+            torch.save(self.text_projection.state_dict(), os.path.join(path, 'text_projection.pth'))
          
     def transform_image(self, images):
         if isinstance(images, torch.Tensor):
@@ -286,9 +295,8 @@ class LiT(CLIP):
         super(LiT, self).__init__(**kwargs)
         
     def setup_training(self, train_vision = False, train_text = True, device = None):
-        self.setup_device(device)
-        self.train_vision = train_vision
-        self.train_text = train_text
+        self._setup_device(device)
+        self._setup_training(train_vision, train_text)
         
 class SigLiT(SigLIP):
     """ SigLIP but freeze the vision model by default."""
