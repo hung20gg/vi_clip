@@ -20,6 +20,7 @@ training_args = {
     'image_folder': 'data/images', # Prefix for image folder (ignore for now)
     'save_dir': 'checkpoints/text_model_base',
     'evaluate_every': 200,
+    'text_projection_iters': 1000,
     'beta2': 0.999 # On siglip, 0.95 is used
 }
 
@@ -30,6 +31,7 @@ model_args = {
     'max_length': 64,
     'model_type': 'siglip',
     'pretrain': True,
+    'force_text_projection': True
 }
 
 eval_args = {
@@ -67,6 +69,7 @@ def parse_to_train_model_eval_args(args):
         'model_type': args.model_type,
         'max_length': args.max_length,
         'pretrain': args.pretrain,
+        'force_text_projection': args.force_text_projection
         
     }
 

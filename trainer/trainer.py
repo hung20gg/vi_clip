@@ -62,6 +62,9 @@ class Trainer:
         if self.mix_precision:
             self.scaler = torch.cuda.amp.GradScaler()
             
+        self.train_projection = model_args.get('force_text_projection', False)
+        self.text_projection_iters = train_args.get('text_projection_iters', 1000)
+            
     def load_checkpoint(self, checkpoint):
         self.model.load_checkpoint(checkpoint['model_state_dict'])
         

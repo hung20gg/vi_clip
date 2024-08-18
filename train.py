@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument('--model_type', type=str, default=model_args['model_type'], help='Model type')
     parser.add_argument('--max_length', type=int, default=model_args['max_length'], help='Maximum length')
     parser.add_argument('--pretrain', type=bool, default=model_args['pretrain'], help='Pretrain model')
+    parser.add_argument('--force_text_projection', type=bool, default=model_args['force_text_projection'], help='Force text projection')
     
     # Evaluation arguments
     parser.add_argument('--is_eval', type=bool, help='Evaluate model')
