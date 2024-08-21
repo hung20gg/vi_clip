@@ -103,24 +103,24 @@ def download_and_extract_batches(repo_name, local_directory, ending='.tar.gz'):
         
         print(f"Moved {parquet_file} to {local_directory}")
 
-    # for tar_file in tqdm(tar_files, desc="Downloading and extracting batches"):
-    #     # Create a temporary directory for this batch
-    #     with tempfile.TemporaryDirectory() as temp_dir:
-    #         # Download the tar file
-    #         tar_path = hf_hub_download(
-    #             repo_id=repo_name,
-    #             filename=tar_file,
-    #             repo_type="dataset",
-    #             cache_dir=temp_dir
-    #         )
+    for tar_file in tqdm(tar_files, desc="Downloading and extracting batches"):
+        # Create a temporary directory for this batch
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Download the tar file
+            tar_path = hf_hub_download(
+                repo_id=repo_name,
+                filename=tar_file,
+                repo_type="dataset",
+                cache_dir=temp_dir
+            )
 
-    #         # Extract the tar file
-    #         with tarfile.open(tar_path, 'r:gz') as tar:
-    #             tar.extractall(path=images_directory)
+            # Extract the tar file
+            with tarfile.open(tar_path, 'r:gz') as tar:
+                tar.extractall(path=images_directory)
 
-    #     print(f"Extracted {tar_file} to {images_directory}")
+        print(f"Extracted {tar_file} to {images_directory}")
 
-    # print("All batches have been downloaded and extracted.")
+    print("All batches have been downloaded and extracted.")
     
     delete_cache_files(local_directory, repo_name)
     
