@@ -99,9 +99,10 @@ def download_and_extract_batches(repo_name, local_directory, ending='.tar.gz'):
         
         print(f"Downloaded {parquet_file} to {local_directory}")
         
-        shutil.move(parquet_path, os.path.join(local_directory, 'captions.parquet'))
+        # Test copy
+        shutil.copy(parquet_path, os.path.join(local_directory, 'captions.parquet'))
         
-        print(f"Moved {parquet_file} to {local_directory}")
+        print(f"Copied {parquet_file} to {local_directory}")
 
     for tar_file in tqdm(tar_files, desc="Downloading and extracting batches"):
         # Create a temporary directory for this batch
