@@ -91,8 +91,8 @@ class EvaluateModel:
     def _encode_text(self, texts):
         
         # Encode text by batch
-        for i in range(0, len(texts), self.eval_args['batch_size']):
-            text_batch = texts[i:i+self.eval_args['batch_size']]
+        for i in tqdm(range(0, len(texts), self.eval_args['batch_size'])):
+            text_batch = texts[i:i+self.eval_args['batch_size']].tolist() # Convert to list
             text_batch = self.model.encode_text(text_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
             if i == 0:
                 text_embeddings = text_batch
@@ -107,7 +107,7 @@ class EvaluateModel:
     def _encode_image(self, images):
         
         # Encode image by batch
-        for i in range(0, len(images), self.eval_args['batch_size']):
+        for i in tqdm(range(0, len(images), self.eval_args['batch_size'])):
             image_batch = images[i:i+self.eval_args['batch_size']]
             
             # Open image
@@ -118,7 +118,7 @@ class EvaluateModel:
             else:
                 image_embeddings = np.concatenate([image_embeddings, image_batch], axis=0)
         return image_embeddings
-    
+
     def _evaluate(self, top_k = 5):
         image_embeddings = self._encode_image(self.dataset['images']['image'].values)
         text_embeddings = self._encode_text(self.dataset['texts']['caption'].values)
