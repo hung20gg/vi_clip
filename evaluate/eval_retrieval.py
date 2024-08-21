@@ -16,8 +16,6 @@ def get_dataset(directory = 'data/evaluate/imagenet'):
         if file.endswith('.parquet'):
             image_text = pd.read_parquet(os.path.join(directory, file))
             break
-            
-    image_text = pd.read_parquet(f'{directory}/image_text.parquet')
     
     image_text['image_id'] = pd.factorize(image_text['image'])[0]
     image_text['text_id'] = pd.factorize(image_text['caption'])[0]
@@ -76,14 +74,14 @@ class EvaluateModel:
            
         # passing model, either through args or directly 
         print("=============Building model=============")
-        if isinstance(model_args, dict):
-            self.model = build_model(model_args)
-            if model_args.get("checkpoint") is not None:
-                self.model.load_checkpoint(torch.load(model_args['checkpoint']))
-        else:
-            self.model = model_args
+        # if isinstance(model_args, dict):
+        #     self.model = build_model(model_args)
+        #     if model_args.get("checkpoint") is not None:
+        #         self.model.load_checkpoint(torch.load(model_args['checkpoint']))
+        # else:
+        #     self.model = model_args
             
-        self.model.to(self.device)
+        # self.model.to(self.device)
         
         self.eval_args = eval_args
         
