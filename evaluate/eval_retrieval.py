@@ -93,7 +93,7 @@ class EvaluateModel:
         # Encode text by batch
         for i in range(0, len(texts), self.eval_args['batch_size']):
             text_batch = texts[i:i+self.eval_args['batch_size']]
-            text_batch = self.model.encode_text(text_batch).cpu().numpy() # (batch, embedding_dim), convert to numpy
+            text_batch = self.model.encode_text(text_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
             if i == 0:
                 text_embeddings = text_batch
             else:
@@ -112,7 +112,7 @@ class EvaluateModel:
             
             # Open image
             image_batch = [self.open_image(image) for image in image_batch]
-            image_batch = self.model.encode_image(image_batch).cpu().numpy() # (batch, embedding_dim), convert to numpy
+            image_batch = self.model.encode_image(image_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
             if i == 0:
                 image_embeddings = image_batch
             else:
