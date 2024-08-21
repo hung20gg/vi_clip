@@ -1,4 +1,5 @@
 import torch
+from torch.utils.data import Dataset
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -6,6 +7,16 @@ from PIL import Image
 import os
 
 from ..trainer import build_model
+
+class TextDataset(Dataset):
+    def __init__(self, texts):
+        self.texts = texts
+        
+    def __len__(self):
+        return len(self.texts)
+    
+    def __getitem__(self, idx):
+        return self.texts[idx]
 
 def get_dataset(directory = 'data/evaluate/imagenet'):
     
@@ -84,11 +95,13 @@ class EvaluateModel:
         self.model.to(self.device)
         
         self.eval_args = eval_args
+        self.is_embedding = False
         
         print("=============Loading dataset=============")
         self.dataset = get_dataset(eval_args['dataset'])
         
     def _encode_text(self, texts):
+        print("=============Encoding texts=============")
         
         # Encode text by batch
         for i in tqdm(range(0, len(texts), self.eval_args['batch_size'])):
@@ -105,6 +118,7 @@ class EvaluateModel:
         return Image.open(image_path)
     
     def _encode_image(self, images):
+        print("=============Encoding images=============")
         
         # Encode image by batch
         for i in tqdm(range(0, len(images), self.eval_args['batch_size'])):
@@ -120,10 +134,11 @@ class EvaluateModel:
         return image_embeddings
 
     def _evaluate(self, top_k = 5):
-        image_embeddings = self._encode_image(self.dataset['images']['image'].values)
-        text_embeddings = self._encode_text(self.dataset['texts']['caption'].values)
-        
-        img_text_scores, text_img_scores = get_top_matches(image_embeddings, text_embeddings, top_k)
+        if not self.is_embedding:
+            self.image_embeddings = self._encode_image(self.dataset['images']['image'].values)
+            self.text_embeddings = self._encode_text(self.dataset['texts']['caption'].values)
+
+        img_text_scores, text_img_scores = get_top_matches(self.image_embeddings, self.text_embeddings, top_k)
         return img_text_scores, text_img_scores
 
         

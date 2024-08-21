@@ -42,11 +42,22 @@ class TensorCaptionDataset(Dataset):
         super(TensorCaptionDataset, self).__init__()
         # self.df = df
         self.directory = directory
-        self.imgs = np.load(os.path.join(directory, 'images.npy'))
+        self.imgs = df['image'].values
         self.descriptions = df['caption'].values
         
+        # Embedding type
+        self.load_type = 'numpy'
+        if self.imgs[0].endswith('.pt'):
+            self.load_type = 'torch'
+        
     def __getitem__(self, index):
-        return self.imgs[index], self.descriptions[index]
+        embed_dir = os.path.join(self.directory, self.imgs[index]), 
+        
+        if self.load_type == 'torch':
+            embed = torch.load(embed_dir)
+        else:
+            embed = np.load(embed_dir)
+        return embed, self.descriptions[index]
 
 class CrossLingualDataset(Dataset):
     def __init__(self, df ):

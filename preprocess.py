@@ -65,7 +65,7 @@ def tar_batch_and_push_to_huggingface(local_directory, repo_name, batch_size=250
     print("All batches have been uploaded to Hugging Face.")
     
 
-def download_and_extract_batches(repo_name, local_directory, ending='.tar.gz'):
+def download_and_extract_batches(repo_name, local_directory, folder_name = "images", ending='.tar.gz'):
     # Initialize Hugging Face API
     start = time.time()
     api = HfApi()
@@ -74,7 +74,7 @@ def download_and_extract_batches(repo_name, local_directory, ending='.tar.gz'):
 
     # Create the local directory if it doesn't exist
     os.makedirs(local_directory, exist_ok=True)
-    images_directory = os.path.join(local_directory, "images")
+    images_directory = os.path.join(local_directory, folder_name)
     os.makedirs(images_directory, exist_ok=True)
 
     # Get the list of files in the repository
