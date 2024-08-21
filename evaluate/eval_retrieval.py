@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from PIL import Image
-from trainer import build_model
+from ..trainer import build_model
 
 def get_dataset(directory = 'data/evaluate/imagenet'):
     
@@ -67,9 +67,10 @@ class EvaluateModel:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
            
         # passing model, either through args or directly 
+        print("=============Building model=============")
         if isinstance(model_args, dict):
             self.model = build_model(model_args)
-            if model_args['checkpoint'] is not None:
+            if model_args.get("checkpoint") is not None:
                 self.model.load_checkpoint(torch.load(model_args['checkpoint']))
         else:
             self.model = model_args
@@ -77,6 +78,8 @@ class EvaluateModel:
         self.model.to(self.device)
         
         self.eval_args = eval_args
+        
+        print("=============Loading dataset=============")
         self.dataset = get_dataset(eval_args['dataset'])
         
     def _encode_text(self, texts):

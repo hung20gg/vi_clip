@@ -8,22 +8,22 @@ from huggingface_hub import hf_hub_download, HfApi, login
 from tqdm import tqdm
 
 def delete_cache_files(local_directory, repo_name):
-    lock_file = os.path.join(local_directory, ".lock")
-    dataset_cache = os.path.join(local_directory, f"dataset--{repo_name.replace('/', '--')}")
+    lock_file = os.path.join(local_directory, ".locks")
+    dataset_cache = os.path.join(local_directory, f"datasets--{repo_name.replace('/', '--')}")
     
     if os.path.exists(lock_file):
         try:
             shutil.rmtree(lock_file)
             print(f"Deleted {lock_file}")
         except:
-            pass
+            print(f"Could not delete {lock_file}")
         
     if os.path.exists(dataset_cache):
         try:
             shutil.rmtree(dataset_cache)
             print(f"Deleted {dataset_cache}")
         except:
-            pass 
+            print(f"Could not delete {dataset_cache}")
             
             
 def tar_batch_and_push_to_huggingface(local_directory, repo_name, batch_size=25000):
@@ -81,6 +81,9 @@ def download_and_extract_batches(repo_name, local_directory, ending='.tar.gz'):
     files = api.list_repo_files(repo_id=repo_name, repo_type="dataset")
     # Filter for tar.gz files
     
+    print(f"Found {len(files)} files in the repository.")
+    print(files)
+    
     tar_files = [f for f in files if f.endswith(ending)]
     parquet_files = [f for f in files if f.endswith('.parquet')]
     
@@ -94,26 +97,30 @@ def download_and_extract_batches(repo_name, local_directory, ending='.tar.gz'):
             cache_dir=local_directory
         )
         
+        print(f"Downloaded {parquet_file} to {local_directory}")
+        
         shutil.move(parquet_path, os.path.join(local_directory, 'captions.parquet'))
+        
+        print(f"Moved {parquet_file} to {local_directory}")
 
-    for tar_file in tqdm(tar_files, desc="Downloading and extracting batches"):
-        # Create a temporary directory for this batch
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Download the tar file
-            tar_path = hf_hub_download(
-                repo_id=repo_name,
-                filename=tar_file,
-                repo_type="dataset",
-                cache_dir=temp_dir
-            )
+    # for tar_file in tqdm(tar_files, desc="Downloading and extracting batches"):
+    #     # Create a temporary directory for this batch
+    #     with tempfile.TemporaryDirectory() as temp_dir:
+    #         # Download the tar file
+    #         tar_path = hf_hub_download(
+    #             repo_id=repo_name,
+    #             filename=tar_file,
+    #             repo_type="dataset",
+    #             cache_dir=temp_dir
+    #         )
 
-            # Extract the tar file
-            with tarfile.open(tar_path, 'r:gz') as tar:
-                tar.extractall(path=images_directory)
+    #         # Extract the tar file
+    #         with tarfile.open(tar_path, 'r:gz') as tar:
+    #             tar.extractall(path=images_directory)
 
-        print(f"Extracted {tar_file} to {images_directory}")
+    #     print(f"Extracted {tar_file} to {images_directory}")
 
-    print("All batches have been downloaded and extracted.")
+    # print("All batches have been downloaded and extracted.")
     
     delete_cache_files(local_directory, repo_name)
     
