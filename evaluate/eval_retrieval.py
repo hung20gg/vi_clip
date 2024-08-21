@@ -3,14 +3,22 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from PIL import Image
+import os
+
 from ..trainer import build_model
 
 def get_dataset(directory = 'data/evaluate/imagenet'):
     
     # Not clarify how the data is stored, but we can assume that the data is stored in parquet format
     
-    # Get 3 different datasets: image_text, image_text_id, image_id_text
+    # Find the parquet file in the directory
+    for file in os.listdir(directory):
+        if file.endswith('.parquet'):
+            image_text = pd.read_parquet(os.path.join(directory, file))
+            break
+            
     image_text = pd.read_parquet(f'{directory}/image_text.parquet')
+    
     image_text['image_id'] = pd.factorize(image_text['image'])[0]
     image_text['text_id'] = pd.factorize(image_text['caption'])[0]
     
