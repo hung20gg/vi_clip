@@ -5,6 +5,7 @@ from transformers import AutoTokenizer,  AutoProcessor, AutoModel, CLIPModel, Si
 from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPText
 from .lossfn import sigliploss, cliploss
 from .model import TextEncoder
+from collections.abc import Iterable 
 
 import gc
 
@@ -143,15 +144,15 @@ class CrossLingual(nn.Module):
         else:
             self.text_model.save_pretrained(path)
         
-    def transform_image(self, image):
+    def transform_image(self, images):
         assert self.vision, 'Vision model is not loaded'
         
-        if isinstance(image, torch.Tensor):
-            return image.to(self.device)
-        if all(isinstance(i, str) for i in image):
-            image = np.array([open_image(i) for i in image])
+        if isinstance(images, torch.Tensor):
+            return images.to(self.device)
+        if isinstance(images, Iterable) and all(isinstance(i, str) for i in images):
+            images = np.array([np.array(open_image(i)) for i in images])
         
-        return self.processor(image, return_tensors='pt').to(self.device)
+        return self.processor(images, return_tensors='pt').to(self.device)
 
     def encode_image(self, image):
         assert self.vision, 'Vision model is not loaded'

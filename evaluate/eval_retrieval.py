@@ -137,7 +137,8 @@ class EvaluateModel:
         if not self.is_embedding:
             self.image_embeddings = self._encode_image(self.dataset['images']['image'].values)
             self.text_embeddings = self._encode_text(self.dataset['texts']['caption'].values)
-
+            self.is_embedding = True
+            
         img_text_scores, text_img_scores = get_top_matches(self.image_embeddings, self.text_embeddings, top_k)
         return img_text_scores, text_img_scores
 
@@ -159,9 +160,9 @@ class EvaluateModel:
     
     def get_relevant_items(self, id, id_type):
         if id_type == 'text':
-            return set(self.dataset['image_text'][self.dataset['image_text']['text_id'] == id])
+            return set(self.dataset['image_text'][self.dataset['image_text']['text_id'] == id]["image_id"])
         else:  # image
-            return set(self.dataset['image_text'][self.dataset['image_text']['image_id'] == id])
+            return set(self.dataset['image_text'][self.dataset['image_text']['image_id'] == id]['text_id'])
     
     def retrieval(self, top_k = 5):
         img_text, text_img = self._evaluate()

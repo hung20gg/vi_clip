@@ -217,7 +217,7 @@ class CLIP(nn.Module):
             return images
         
         if isinstance(images, Iterable) and all(isinstance(i, str) for i in images):
-            images = np.array([open_image(i) for i in images])
+            images = np.array([np.array(open_image(i)) for i in images])
         
         if self.vision_source == 'timm':
             return self.processor(images)
