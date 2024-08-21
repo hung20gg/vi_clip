@@ -26,6 +26,10 @@ def get_dataset(directory = 'data/evaluate/imagenet'):
     for file in os.listdir(directory):
         if file.endswith('.parquet'):
             image_text = pd.read_parquet(os.path.join(directory, file))
+            
+            # Test the original language
+            # image_text.drop(columns=['caption'], inplace=True)
+            # image_text.rename(columns={'original': 'caption'}, inplace=True)
             break
     
     image_text['image_id'] = pd.factorize(image_text['image'])[0]
@@ -179,14 +183,14 @@ class EvaluateModel:
         for i in range(len_text):
             relevant_images = self.get_relevant_items(i, 'text')
             retrieved_images_k = set(text_img[i,:top_k])
-            text_img_recall_k += len(relevant_images & retrieved_images_k) / min(len(retrieved_images_k),top_k)
+            text_img_recall_k += len(relevant_images & retrieved_images_k) / top_k
             text_img_recall_1 += 1 if text_img[i,0] in relevant_images else 0
             
         # Retrieval for image to text
         for i in range(len_img):
             relevant_texts = self.get_relevant_items(i, 'image')
             retrieved_texts_k = set(img_text[i,:top_k])
-            img_text_recall_k += len(relevant_texts & retrieved_texts_k) / min(len(retrieved_texts_k),top_k)
+            img_text_recall_k += len(relevant_texts & retrieved_texts_k) / top_k
             img_text_recall_1 += 1 if img_text[i,0] in relevant_texts else 0
             
         text_img_recall_1 /= len_text
