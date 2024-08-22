@@ -108,13 +108,14 @@ class EvaluateModel:
         print("=============Encoding texts=============")
         
         # Encode text by batch
-        for i in tqdm(range(0, len(texts), self.eval_args['batch_size'])):
-            text_batch = texts[i:i+self.eval_args['batch_size']].tolist() # Convert to list
-            text_batch = self.model.encode_text(text_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
-            if i == 0:
-                text_embeddings = text_batch
-            else:
-                text_embeddings = np.concatenate([text_embeddings, text_batch], axis=0)
+        with torch.no_grad():
+            for i in tqdm(range(0, len(texts), self.eval_args['batch_size'])):
+                text_batch = texts[i:i+self.eval_args['batch_size']].tolist() # Convert to list
+                text_batch = self.model.encode_text(text_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
+                if i == 0:
+                    text_embeddings = text_batch
+                else:
+                    text_embeddings = np.concatenate([text_embeddings, text_batch], axis=0)
         return text_embeddings
     
     @staticmethod
@@ -125,16 +126,17 @@ class EvaluateModel:
         print("=============Encoding images=============")
         
         # Encode image by batch
-        for i in tqdm(range(0, len(images), self.eval_args['batch_size'])):
-            image_batch = images[i:i+self.eval_args['batch_size']]
-            
-            # Open image
-            image_batch = [self.open_image(image) for image in image_batch]
-            image_batch = self.model.encode_image(image_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
-            if i == 0:
-                image_embeddings = image_batch
-            else:
-                image_embeddings = np.concatenate([image_embeddings, image_batch], axis=0)
+        with torch.no_grad():
+            for i in tqdm(range(0, len(images), self.eval_args['batch_size'])):
+                image_batch = images[i:i+self.eval_args['batch_size']]
+                
+                # Open image
+                image_batch = [self.open_image(image) for image in image_batch]
+                image_batch = self.model.encode_image(image_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
+                if i == 0:
+                    image_embeddings = image_batch
+                else:
+                    image_embeddings = np.concatenate([image_embeddings, image_batch], axis=0)
         return image_embeddings
 
     def _evaluate(self, top_k = 5):
