@@ -12,15 +12,18 @@ def mean_pooling(model_output, attention_mask):
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-def open_image(image, size = 224):
-    image = Image.open(image)
+def open_image(image, size = 224, convert_to_numpy = True):
+    image = Image.open(image).convert('RGB')
     if image.width != size or image.height != size:
         image = image.resize((size, size))
-    image = np.array(image)
-    if image.shape == 2:
-        image = np.stack([image, image, image], axis = -1)
-    if image.shape[2] == 4:
-        image = image[:,:,:3]
+    
+    # Convert to numpy
+    if convert_to_numpy:
+        image = np.array(image)
+        if image.shape == 2:
+            image = np.stack([image, image, image], axis = -1)
+        if image.shape[2] == 4:
+            image = image[:,:,:3]
     return image
 
 class CLIPText(nn.Module):

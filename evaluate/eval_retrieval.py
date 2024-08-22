@@ -96,7 +96,10 @@ class EvaluateModel:
         else:
             self.model = model_args
             
-        self.model.to(self.device)
+        if hasattr(self.model, 'setup_training'):
+            self.model.setup_training(train_vision=False, train_text=False, device=self.device)
+        else:
+            self.model.to(self.device)
         
         self.eval_args = eval_args
         self.is_embedding = False
@@ -131,7 +134,7 @@ class EvaluateModel:
                 image_batch = images[i:i+self.eval_args['batch_size']]
                 
                 # Open image
-                image_batch = [self.open_image(image) for image in image_batch]
+                # image_batch = [self.open_image(image) for image in image_batch]
                 image_batch = self.model.encode_image(image_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
                 if i == 0:
                     image_embeddings = image_batch

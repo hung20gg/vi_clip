@@ -216,11 +216,18 @@ class CLIP(nn.Module):
         if isinstance(images, torch.Tensor):
             return images
         
-        if isinstance(images, Iterable) and all(isinstance(i, str) for i in images):
-            images = np.array([np.array(open_image(i)) for i in images])
+        if isinstance(images, str):
+            images = [images]
+        
+        if  all(isinstance(i, str) for i in images):
+            # print("Iterating through images")
+            if self.vision_source == 'timm':
+                images = [open_image(i, convert_to_numpy=False) for i in images]
+            else:
+                images = np.array([open_image(i) for i in images])
         
         if self.vision_source == 'timm':
-            return self.processor(images)
+            return torch.stack([self.processor(image) for image in images])
         return self.processor(images = images, return_tensors='pt')
 
         
