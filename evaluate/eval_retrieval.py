@@ -141,6 +141,49 @@ class EvaluateModel:
                 else:
                     image_embeddings = np.concatenate([image_embeddings, image_batch], axis=0)
         return image_embeddings
+    
+    def preembed_image(self, path = "data/embeddings", embedding_type = 'numpy', batch_size = 32):
+        image_embedings_files = []
+        image_files = []
+        
+        if not os.path.exists(path):
+            os.makedirs(path)
+        
+        # Single threaded
+        # for line in tqdm(self.dataset['images']['image'].values):
+        #     file_name = line.split('/')[-1].split('.')[0]
+        #     embedding = self.model.encode_image(line).squeeze()
+            
+        #     if embedding_type == 'numpy':
+        #         np.save(f'{path}/{file_name}.npy', embedding.cpu().detach().numpy())
+        #         image_embedings_files.append(f'{file_name}.npy')
+        #     else:
+        #         torch.save(embedding, f'{path}/{file_name}.pt')
+        #         image_embedings_files.append(f'{file_name}.pt')
+        #     image_files.append(file_name)
+            
+        for i in tqdm(range(0, len(self.dataset['images']['image'].values), batch_size)):
+            image_files_batch = self.dataset['images']['image'].values[i:i+batch_size]
+            image_embedings_files_batch = [line.split('/')[-1].split('.')[0] for line in image_files_batch]
+            
+            
+            embedding_batch = self.model.encode_image(image_files_batch)
+            for j, file_name in enumerate(image_embedings_files_batch):
+                if embedding_type == 'numpy':
+                    np.save(f'{path}/{file_name}.npy', embedding_batch[j].cpu().detach().numpy())
+                else:
+                    torch.save(embedding_batch[j], f'{path}/{file_name}.pt')
+                    
+                    
+            image_files.extend(image_files_batch)
+            if embedding_type == 'numpy':
+                image_embedings_files.extend([f'{file_name}.npy' for file_name in image_embedings_files_batch])
+            else:
+                image_embedings_files.extend([f'{file_name}.pt' for file_name in image_embedings_files_batch])
+              
+            
+        return pd.DataFrame({'image': image_files, 'embedding': image_embedings_files})
+            
 
     def _evaluate(self, top_k = 5):
         if not self.is_embedding:

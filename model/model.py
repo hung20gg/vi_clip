@@ -15,84 +15,106 @@ class TextEncoder(nn.Module):
     Testing: New approach for training text encoder.
     No need to load the vision model, passing the embedding directly to the model.
     """
-    def __init__(self, model, device, model_type, projection_dim = 768, max_length = 64, init_scale = 10, init_bias = -10):
+    def __init__(self, 
+                 text_model, 
+                 model_type = 'siglip', 
+                 projection_dim = 768, 
+                 max_length = 64, 
+                 force_text_projection = True,
+                 init_scale = 10, 
+                 init_bias = -10,
+                 **kwargs):
         super(TextEncoder, self).__init__()
-        self.device = device
-        self.text_model = AutoModel.from_pretrained(model).to(self.device)
-        self.tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True)
+  
+        self.text_model = AutoModel.from_pretrained(text_model)
+        self.tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
         self.max_length = max_length
         self.model_type = model_type
+        self.force_text_projection = force_text_projection
         
-        if self.text_model.config.hidden_size != projection_dim:
+        if self.text_model.config.hidden_size != projection_dim or force_text_projection:
             self.text_projection = nn.Linear(self.text_model.config.hidden_size, projection_dim)
         else:
             self.text_projection = nn.Identity()
         
         if model_type == 'mse':
             self.loss_fn = nn.MSELoss()
-        elif model_type == 'clip':
+            self.loss_type = 'mse'
+            
+        elif model_type in ['clip', 'lit', 'text_clip', 'text_lit']:
             self.loss_fn = cliploss
+            self.loss_type = 'softmax'
+            
         else:
             self.loss_fn = sigliploss
             self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
             self.logit_bias  = nn.Parameter(torch.ones(1) * init_bias)
+            self.loss_type = 'sigmoid'
             
+    def _setup_device(self, device = None):
+        if device is not None:
+            self.device = device
+        else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.to(self.device)
+            
+    def setup_training(self, train_text = True, device = None, **kwargs):
+        self._setup_device(device)
+        self.train_text = train_text
+        
+        if not train_text:
+            print('Freezing text model')
+        for param in self.text_model.parameters():
+            param.requires_grad = train_text
+     
+    # ========================   
+    # Saving and loading checkpoints    
+    def load_checkpoint(self, checkpoint):
+        self.load_state_dict(torch.load(checkpoint))
+        
+    def save_checkpoint(self, path):
+        torch.save(self.state_dict(), path)
+        
+    def load_text_checkpoint(self, checkpoint):
+        self.text_model.load_state_dict(torch.load(checkpoint))
+        
+    def save_text_checkpoint(self, path, using_automodel = True):
+        if not using_automodel:
+            torch.save(self.text_model.state_dict(), os.path.join(path, 'text_model.pth'))
+        else:
+            self.text_model.save_pretrained(path)
+        self.save_projection_checkpoint(path)
+         
+    def save_projection_checkpoint(self, path):
+        if hasattr(self, 'text_projection'):
+            torch.save(self.text_projection.state_dict(), os.path.join(path, 'text_projection.pth'))
+    
+    # ========================
         
     def tokenize(self, text):
         return self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
     
-    def encode_text(self, text):
+    def encode_text(self, text, result = 'mean'):
         inputs = self.tokenize(text)
         outputs = self.text_model(**inputs).last_hidden_state
-        emb_text = mean_pooling(outputs, inputs['attention_mask'])
+        
+        if result == 'eos':
+            emb_text = outputs
+            emb_text = emb_text[torch.arange(emb_text.shape[0]), torch.where(inputs['input_ids'] == self.tokenizer.eos_token_id)[1]]
+        else:
+            emb_text = mean_pooling(outputs, inputs['attention_mask'])
+            
         emb_text = self.text_projection(emb_text)
+        
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)
     
     def forward(self, texts: torch.Tensor, images: torch.Tensor):
         # texts: y_pred, images: y_train
-        if self.model_type in ['clip', 'mse']:
+        if self.loss_type == 'sigmoid':
             return self.loss_fn(images, texts)
         else:
-            return self.loss_fn(images, texts, self.logit_scale, self.logit_bias)
-    
-class LiT2:
-    def __init__(self, text_model, vision_model, device = None, max_length = 64, pretrain = True, **kwargs):
-        
-        if device is not None:
-            self.device = device
-        else:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.text_model = TextEncoder(text_model, max_length, device=self.device)
-        self.vision_model = timm.create_model(
-                vision_model,
-                pretrained=pretrain,
-                num_classes=0,
-            ).to(self.device)
-
-        self.encode_text = self.text_model.encode_text
-        self.data_config = timm.data.resolve_data_config({}, model=self.vision_model)
-        self.processor = timm.data.create_transform(**self.data_config, is_training=False)
-        
-    def transform_image(self, image):
-        if isinstance(image, torch.Tensor):
-            return image
-        
-        if all(isinstance(i, str) for i in image):
-            image = np.array([open_image(i) for i in image])
-        
-        return self.processor(image)
-    
-    def encode_image(self, image):
-        image = self.transform_image(image).to(self.device)
-        if len(image.shape) == 3:
-            image = image.unsqueeze(0)
-        self.vision_model.eval()
-        with torch.no_grad():
-            output = self.vision_model(image)
-        emb_norm = torch.norm(output, dim=1, keepdim=True)
-        return output / (emb_norm + 1e-8)
-        
+            return self.loss_fn(images, texts, self.logit_scale, self.logit_bias)        
 
 class CLIP(nn.Module):
     """

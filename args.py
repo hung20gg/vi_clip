@@ -18,6 +18,7 @@ training_args = {
     'num_workers': 6,
     'dataset': ['data/dfn_20', 'data/image_caption', 'data/sharegpt4v','data/wit'], # Directory of the dataset
     'image_folder': 'data/images', # Prefix for image folder (ignore for now)
+    'data_type': 'numpy', # 'numpy' or 'images'
     'save_dir': 'checkpoints/text_model_base',
     'evaluate_every': 200,
     'text_projection_iters': 1000,
@@ -29,7 +30,7 @@ model_args = {
     'vision_model': 'vit_base_patch16_siglip_224',
     'clip_model': 'google/siglip-base-patch16-224',
     'max_length': 64,
-    'model_type': 'siglip',
+    'model_type': 'siglip', # 'text_siglip' or 'text_clip'
     'pretrain': True,
     'force_text_projection': True
 }

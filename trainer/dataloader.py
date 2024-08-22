@@ -1,4 +1,4 @@
-from torch.utils.data import DataLoader, Dataset, BatchSampler
+from torch.utils.data import DataLoader, Dataset, TensorDataset, BatchSampler
 import torch
 import os
 from torchvision.io import read_image
@@ -31,8 +31,8 @@ class ImageCaptionDataset(Dataset):
         label = self.descriptions[idx]
         return img, label
 
-class TensorCaptionDataset(Dataset):
-    def __init__(self, df, directory = ''):
+class TensorCaptionDataset(TensorDataset):
+    def __init__(self, df, directory = '', type_ = 'numpy'):
         """Dataset with preprocessed embeddings
 
         Args:
@@ -46,17 +46,20 @@ class TensorCaptionDataset(Dataset):
         self.descriptions = df['caption'].values
         
         # Embedding type
-        self.load_type = 'numpy'
-        if self.imgs[0].endswith('.pt'):
-            self.load_type = 'torch'
+        self.load_type = type_
         
     def __getitem__(self, index):
-        embed_dir = os.path.join(self.directory, self.imgs[index]), 
+        embed_dir = os.path.join(self.directory, self.imgs[index])
         
         if self.load_type == 'torch':
+            embed_dir = embed_dir.split('.')[0] + '.pt'
             embed = torch.load(embed_dir)
-        else:
+        elif self.load_type == 'numpy':
+            embed_dir = embed_dir.split('.')[0] + '.npy'
             embed = np.load(embed_dir)
+        else:
+            raise ValueError("Embedding type not supported")
+        
         return embed, self.descriptions[index]
 
 class CrossLingualDataset(Dataset):

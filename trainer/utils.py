@@ -1,8 +1,8 @@
-from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP, BaselineCLIP
+from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP, BaselineCLIP, TextEncoder
 import os
 import pandas as pd
 from torch.utils.data import DataLoader
-from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset
+from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset, TensorCaptionDataset
 from torch.utils.data.distributed import DistributedSampler
 
 def build_model(model_args):
@@ -34,7 +34,7 @@ def build_model(model_args):
     elif model_type.lower() == 'baseline':
         model = BaselineCLIP(**model_args)
     else:
-        raise ValueError(f"Model type {model_type} not found")
+        model = TextEncoder(**model_args)
     
     return model
 
@@ -73,14 +73,20 @@ def get_dataloader(train_args, model_args, train = True):
                 df = pd.read_parquet(os.path.join(data, file))
         assert df is not None, "No parquet file found in the directory"
         
-        if training_objective in ['clip','siglip','lit','siglit']:
-            dataset = ImageCaptionDataset(df, os.path.join(data, 'images'))
-            # sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
-        elif training_objective == 'crosslingual':
-            
-            dataset = CrossLingualDataset(df)
+        # Load the embeddings
+        if model_args.get('data_type', 'images') == 'numpy':
+            dataset = TensorCaptionDataset(df, path = os.path.join(data, 'numpy'), type_ = 'numpy')
+        
         else:
-            dataset = mCLIPDataset(df, os.path.join(data, 'images'))
+            # Load the images
+            if training_objective in ['clip','siglip','lit','siglit']:
+                dataset = ImageCaptionDataset(df, os.path.join(data, 'images'))
+                # sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
+            elif training_objective == 'crosslingual':
+                
+                dataset = CrossLingualDataset(df)
+            else:
+                dataset = mCLIPDataset(df, os.path.join(data, 'images'))
         
         if is_ddp:
             # from torch.utils.data.distributed import DistributedSampler
