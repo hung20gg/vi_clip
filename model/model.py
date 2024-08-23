@@ -4,7 +4,7 @@ import numpy as np
 from .lossfn import sigliploss, cliploss
 from transformers import AutoTokenizer, AutoModel, AutoProcessor, CLIPImageProcessor
 import timm
-from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPText
+from .utils import mean_pooling, count_parameters, open_image, all_gather_default, CLIPImage, CLIPText
 from collections.abc import Iterable 
 import gc
 import os
@@ -31,6 +31,7 @@ class TextEncoder(nn.Module):
         self.max_length = max_length
         self.model_type = model_type
         self.force_text_projection = force_text_projection
+        self.device = None
         
         if self.text_model.config.hidden_size != projection_dim or force_text_projection:
             self.text_projection = nn.Linear(self.text_model.config.hidden_size, projection_dim)
@@ -61,6 +62,7 @@ class TextEncoder(nn.Module):
     def setup_training(self, train_text = True, device = None, **kwargs):
         self._setup_device(device)
         self.train_text = train_text
+        self.train_vision = False
         
         if not train_text:
             print('Freezing text model')
@@ -109,9 +111,16 @@ class TextEncoder(nn.Module):
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)
     
-    def forward(self, texts: torch.Tensor, images: torch.Tensor):
+    def forward(self, images: torch.Tensor, texts, train_type = 'single', **kwargs):
         # texts: y_pred, images: y_train
-        if self.loss_type == 'sigmoid':
+        
+        texts = self.encode_text(texts)
+        
+        if train_type == 'ddp':
+            images = all_gather_default(images, self.train_vision)
+            texts = all_gather_default(texts, self.train_text)
+        
+        if self.loss_type != 'sigmoid':
             return self.loss_fn(images, texts)
         else:
             return self.loss_fn(images, texts, self.logit_scale, self.logit_bias)        
@@ -143,6 +152,7 @@ class CLIP(nn.Module):
         self.force_text_projection = force_text_projection
         self.train_text = False
         self.train_vision = False
+        self.device = None
         
         self.max_length = max_length
         if is_load:
@@ -293,9 +303,13 @@ class CLIP(nn.Module):
         
         return image_embed, text_embed
         
-    def forward(self, images, texts):
+    def forward(self, images, texts, train_type = 'single', **kwargs):
         image_embed = self.encode_image(images)
         text_embed = self.encode_text(texts)
+        
+        if train_type == 'ddp':
+            image_embed = all_gather_default(image_embed, self.train_vision)
+            text_embed  = all_gather_default(text_embed, self.train_text)  
         
         return self.loss_fn(image_embed, text_embed)
     

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from transformers import AutoTokenizer,  AutoProcessor, AutoModel, CLIPModel, SiglipModel
-from .utils import mean_pooling, count_parameters, open_image, CLIPImage, CLIPText
+from .utils import mean_pooling, count_parameters, open_image, all_gather_default, CLIPImage, CLIPText
 from .lossfn import sigliploss, cliploss
 from .model import TextEncoder
 from collections.abc import Iterable 
@@ -197,10 +197,14 @@ class CrossLingual(nn.Module):
         text_embed = self.encode_text(texts)
         return image_embed, text_embed
         
-    def forward(self, text_1, text_2):
+    def forward(self, text_1, text_2, train_type = 'clip', **kwargs):
         
         y_pred = self.encode_text(text_1)
         y_true = self.encode_clip_text(text_2)
+        
+        if train_type == 'ddp':
+            y_pred = all_gather_default(y_pred, self.train_text)
+            y_true = all_gather_default(y_true, self.train_clip_text)
         
         return self.loss_fn(y_pred, y_true)
     

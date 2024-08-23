@@ -3,6 +3,19 @@ import torch.nn as nn
 from PIL import Image
 import numpy as np
 
+# the gather method used in https://amsword.medium.com/gradient-backpropagation-with-torch-distributed-all-gather-9f3941a381f8
+def all_gather_default(tensor, train = True):
+    world_size = torch.distributed.get_world_size()
+    with torch.no_grad:
+        tensor_list = [torch.empty_like(tensor) for _ in range(world_size)]
+        torch.distributed.all_gather(tensor_list, tensor)
+    
+    # All gather is not needed for evaluation
+    if train:
+        tensor_list[torch.distributed.get_rank()] = tensor
+        
+    tensor_list = torch.cat(tensor_list, dim=0)
+    return tensor_list
 
 def mean_pooling(model_output, attention_mask):
     token_embeddings = model_output #First element of model_output contains all token embeddings
