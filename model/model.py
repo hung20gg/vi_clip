@@ -111,10 +111,11 @@ class TextEncoder(nn.Module):
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)
     
-    def forward(self, images: torch.Tensor, texts, train_type = 'single', **kwargs):
+    def forward(self, images, texts, train_type = 'single', **kwargs):
         # texts: y_pred, images: y_train
         
         texts = self.encode_text(texts)
+        images = torch.tensor(images).to(self.device)
         
         if train_type == 'ddp':
             images = all_gather_default(images, self.train_vision)
@@ -143,7 +144,7 @@ class CLIP(nn.Module):
                  projection_dim = 768,
                  max_length = 64,
                  is_load = True,
-                 force_text_projection = True,
+                 force_text_projection = False,
                  **kwargs):
         super(CLIP, self).__init__()
 

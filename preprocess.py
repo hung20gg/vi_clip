@@ -26,14 +26,17 @@ def delete_cache_files(local_directory, repo_name):
             print(f"Could not delete {dataset_cache}")
             
             
-def tar_batch_and_push_to_huggingface(local_directory, repo_name, batch_size=25000):
+def tar_batch_and_push_to_huggingface(local_directory, repo_name, batch_size=25000, type_ = 'images'):
     # Login to Hugging Face
     # Initialize Hugging Face API
     api = HfApi()
 
     # Get all image files from the directory
-    image_files = [f for f in os.listdir(local_directory) if f.lower().endswith(('.png', '.jpg','.jpeg'))]
-
+    if type_ == 'images':
+        image_files = [f for f in os.listdir(local_directory) if f.lower().endswith(('.png', '.jpg','.jpeg'))]
+    elif type_ == 'numpy':
+        image_files = [f for f in os.listdir(local_directory) if f.lower().endswith('.npy')]
+        
     # Process and upload in batches
     for i in range(0, len(image_files), batch_size):
         batch = image_files[i:i+batch_size]

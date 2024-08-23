@@ -1,10 +1,11 @@
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, TensorDataset, DataLoader
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from PIL import Image
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from ..trainer import build_model
 
@@ -17,6 +18,31 @@ class TextDataset(Dataset):
     
     def __getitem__(self, idx):
         return self.texts[idx]
+    
+    
+class ImageDataset(Dataset):
+    def __init__(self, images,  embedding_type = 'numpy'):
+        self.imgs = images
+        self.embedding_type = embedding_type
+        
+    def __len__(self):
+        return len(self.imgs)
+    
+    def __getitem__(self, idx):
+        file_name = self.imgs[idx]
+        if self.embedding_type == 'numpy':
+            file_name = file_name + '.npy'
+            img = np.load(file_name)
+            
+        elif self.embedding_type == 'image_string':
+            img = file_name
+            
+        elif self.embedding_type == 'image':
+            img = Image.open(file_name)
+            
+        file_name = os.path.basename(file_name).split('.')[0]
+        return img, file_name
+
 
 def get_dataset(directory = 'data/evaluate/imagenet'):
     
@@ -41,7 +67,7 @@ def get_dataset(directory = 'data/evaluate/imagenet'):
     text_df.sort_values('text_id', inplace=True)
     image_df.sort_values('image_id', inplace=True)
 
-    image_df['image'] = image_df['image'].apply(lambda x: f'{directory}/images/{x}')
+    image_df['image'] = image_df['image'].apply(lambda x: os.path.join(directory, 'images', x))
 
     return {
         'images': image_df,
@@ -78,6 +104,77 @@ def get_top_matches(image_embeddings, text_embeddings, top_k = 5):
     text_img_scores = np.argsort(scores.T, axis=1)[:,::-top_k]
     
     return img_text_scores, text_img_scores
+
+
+def save_embedding(file_name, embedding, path):
+    np.save(f'{path}/{file_name}.npy', embedding.cpu().detach().numpy())
+
+# Multithread
+def save_embeddings_in_parallel(file_names, embedding_batch, path):
+
+    with ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(save_embedding, file_name, embedding_batch[j], path)
+            for j, file_name in enumerate(file_names)
+        ]
+        # Optionally wait for all threads to complete
+        for future in futures:
+            future.result()               
+   
+from multiprocessing import Process, Queue, cpu_count        
+# Function to save embeddings (consumer)
+
+# Multiprocess multithread
+def save_embedding_consumer2(queue, path):
+    while True:
+        file_names, embedding_batch = queue.get()
+        if file_names is None:
+            break  # Exit when a sentinel value (None) is received
+        save_embeddings_in_parallel(file_names, embedding_batch, path)
+        
+# Multiprocess single thread
+def save_embedding_consumer(queue, path):
+    while True:
+        file_name, embedding = queue.get()
+        if file_name is None:
+            break  # Exit when a sentinel value (None) is received
+        np.save(f'{path}/{file_name}.npy', embedding.cpu().detach().numpy())
+
+# Producer function that encodes images (main process)
+def process_images_and_save(dataloader, model, path, num_workers=None):
+    queue = Queue()
+
+    # Determine number of workers (consumers) based on CPU cores if not provided
+    if num_workers is None:
+        num_workers = cpu_count()  # Use all available cores
+
+    # Start consumer processes
+    consumer_processes = []
+    for _ in range(num_workers):
+
+        p = Process(target=save_embedding_consumer2, args=(queue, path))
+        p.start()
+        consumer_processes.append(p)
+
+    # Producer loop (encoding and putting into the queue)
+    # Cache the embeddings 
+   
+    i = 0
+    for images, file_names in tqdm(dataloader):
+        embedding_batch = model.encode_image(images)
+        queue.put((file_names, embedding_batch))  # Put embeddings in queue
+
+    # Signal the consumer processes to exit
+    for _ in range(num_workers):
+        queue.put((None, None))  # Sentinel value to signal the consumers to stop
+
+    # Wait for all consumers to finish
+    for p in consumer_processes:
+        p.join()
+        
+        
+        
+
     
 class EvaluateModel:
     def __init__(self, model_args, eval_args, device = None):
@@ -110,11 +207,14 @@ class EvaluateModel:
     def _encode_text(self, texts):
         print("=============Encoding texts=============")
         
+        dataset = TextDataset(texts)
+        dataloader = DataLoader(dataset, batch_size=self.eval_args['batch_size'], num_workers=self.eval_args['num_workers'], shuffle=False)
+        
         # Encode text by batch
         with torch.no_grad():
-            for i in tqdm(range(0, len(texts), self.eval_args['batch_size'])):
-                text_batch = texts[i:i+self.eval_args['batch_size']].tolist() # Convert to list
-                text_batch = self.model.encode_text(text_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
+            for texts in tqdm(dataloader):
+
+                text_batch = self.model.encode_text(texts).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
                 if i == 0:
                     text_embeddings = text_batch
                 else:
@@ -128,62 +228,34 @@ class EvaluateModel:
     def _encode_image(self, images):
         print("=============Encoding images=============")
         
+        dataset = ImageDataset(images, 'image_string')
+        dataloader = DataLoader(dataset, batch_size=self.eval_args['batch_size'], num_workers=self.eval_args['num_workers'], shuffle=False)
+        
         # Encode image by batch
         with torch.no_grad():
-            for i in tqdm(range(0, len(images), self.eval_args['batch_size'])):
-                image_batch = images[i:i+self.eval_args['batch_size']]
-                
+            for images, ids in tqdm(dataloader):
                 # Open image
-                # image_batch = [self.open_image(image) for image in image_batch]
-                image_batch = self.model.encode_image(image_batch).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
+
+                image_batch = self.model.encode_image(images).cpu().detach().numpy() # (batch, embedding_dim), convert to numpy
                 if i == 0:
                     image_embeddings = image_batch
                 else:
                     image_embeddings = np.concatenate([image_embeddings, image_batch], axis=0)
         return image_embeddings
     
-    def preembed_image(self, path = "data/embeddings", embedding_type = 'numpy', batch_size = 32):
-        image_embedings_files = []
-        image_files = []
-        
+    # For pre-embedding images and save the embeddings
+    def preembed_image(self, path = "data/embeddings", embedding_type = 'numpy', num_workers = 18):
+
         if not os.path.exists(path):
             os.makedirs(path)
         
-        # Single threaded
-        # for line in tqdm(self.dataset['images']['image'].values):
-        #     file_name = line.split('/')[-1].split('.')[0]
-        #     embedding = self.model.encode_image(line).squeeze()
-            
-        #     if embedding_type == 'numpy':
-        #         np.save(f'{path}/{file_name}.npy', embedding.cpu().detach().numpy())
-        #         image_embedings_files.append(f'{file_name}.npy')
-        #     else:
-        #         torch.save(embedding, f'{path}/{file_name}.pt')
-        #         image_embedings_files.append(f'{file_name}.pt')
-        #     image_files.append(file_name)
-            
-        for i in tqdm(range(0, len(self.dataset['images']['image'].values), batch_size)):
-            image_files_batch = self.dataset['images']['image'].values[i:i+batch_size]
-            image_embedings_files_batch = [line.split('/')[-1].split('.')[0] for line in image_files_batch]
-            
-            
-            embedding_batch = self.model.encode_image(image_files_batch)
-            for j, file_name in enumerate(image_embedings_files_batch):
-                if embedding_type == 'numpy':
-                    np.save(f'{path}/{file_name}.npy', embedding_batch[j].cpu().detach().numpy())
-                else:
-                    torch.save(embedding_batch[j], f'{path}/{file_name}.pt')
-                    
-                    
-            image_files.extend(image_files_batch)
-            if embedding_type == 'numpy':
-                image_embedings_files.extend([f'{file_name}.npy' for file_name in image_embedings_files_batch])
-            else:
-                image_embedings_files.extend([f'{file_name}.pt' for file_name in image_embedings_files_batch])
-              
-            
-        return pd.DataFrame({'image': image_files, 'embedding': image_embedings_files})
-            
+        batch_size = self.eval_args['batch_size']
+        dataset = ImageDataset(self.dataset['images']['image'].values, 'image_string')
+        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=self.eval_args['num_workers'], shuffle=False)
+        
+        with torch.no_grad():
+            process_images_and_save(dataloader, self.model, path, num_workers=num_workers)
+     
 
     def _evaluate(self, top_k = 5):
         if not self.is_embedding:
