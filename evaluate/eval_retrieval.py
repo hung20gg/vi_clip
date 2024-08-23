@@ -152,7 +152,7 @@ def process_images_and_save(dataloader, model, path, num_workers=None):
     consumer_processes = []
     for _ in range(num_workers):
 
-        p = Process(target=save_embedding_consumer2, args=(queue, path))
+        p = Process(target=save_embedding_consumer, args=(queue, path))
         p.start()
         consumer_processes.append(p)
 
@@ -162,7 +162,9 @@ def process_images_and_save(dataloader, model, path, num_workers=None):
     i = 0
     for images, file_names in tqdm(dataloader):
         embedding_batch = model.encode_image(images)
-        queue.put((file_names, embedding_batch))  # Put embeddings in queue
+        for j, file_name in enumerate(file_names):
+            queue.put((file_name, embedding_batch[j]))
+        # queue.put((file_names, embedding_batch))  # Put embeddings in queue
 
     # Signal the consumer processes to exit
     for _ in range(num_workers):
