@@ -75,7 +75,7 @@ def get_dataloader(train_args, model_args, train = True):
         
         # Load the embeddings
         if model_args.get('data_type', 'images') == 'numpy':
-            dataset = TensorCaptionDataset(df, path = os.path.join(data, 'numpy'), type_ = 'numpy')
+            dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy')
         
         else:
             # Load the images
