@@ -4,7 +4,7 @@ import numpy as np
 from .lossfn import sigliploss, cliploss
 from transformers import AutoTokenizer, AutoModel, AutoProcessor, CLIPImageProcessor
 import timm
-from .utils import mean_pooling, count_parameters, open_image, all_gather_default, CLIPImage, CLIPText
+from .utils import mean_pooling, count_parameters, open_image, all_gather_default, print_detail, CLIPImage, CLIPText
 from collections.abc import Iterable 
 import gc
 import os
@@ -120,6 +120,9 @@ class TextEncoder(nn.Module):
         if train_type == 'ddp':
             images = all_gather_default(images, self.train_vision)
             texts = all_gather_default(texts, self.train_text)
+            
+        print_detail(images, 'images')
+        print_detail(texts, 'texts')
         
         if self.loss_type != 'sigmoid':
             return self.loss_fn(images, texts)

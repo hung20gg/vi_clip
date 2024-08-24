@@ -39,6 +39,15 @@ def open_image(image, size = 224, convert_to_numpy = True):
             image = image[:,:,:3]
     return image
 
+
+def print_detail(tensor: torch.Tensor, name: str):
+    print(f"Name: {name}")
+    print(f"Shape: {tensor.shape}")
+    print(f"Device: {tensor.device}")
+    print(f"Requires_grad: {tensor.requires_grad}")
+    print(f"Data type: {tensor.dtype}")
+    
+
 class CLIPText(nn.Module):
     """ 
         Get the text tower model from CLIP/SigLIP
