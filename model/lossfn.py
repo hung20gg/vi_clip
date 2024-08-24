@@ -19,6 +19,10 @@ def cliploss(image_embed, text_embed):
     loss_img = nn.CrossEntropyLoss()
     loss_txt = nn.CrossEntropyLoss()
 
+    # if all_image_embed is not None and all_text_embed is not None:
+    #     logits_image = torch.matmul(image_embed, all_text_embed.t())
+    #     logits_text = torch.matmul(text_embed, all_image_embed.t())
+    # else:
     logits_image = torch.matmul(image_embed, text_embed.t())
     logits_text = torch.matmul(text_embed, image_embed.t())
     

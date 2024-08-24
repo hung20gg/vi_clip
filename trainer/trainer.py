@@ -8,6 +8,11 @@ import torch.multiprocessing as mp
 from torch.distributed import init_process_group, destroy_process_group
 
 
+class Args:
+    def __init__(self, world_size, rank):
+        self.world_size = world_size
+        self.rank = rank
+
 class Trainer:
     def __init__(self, model_args : dict, train_args : dict):
         self.model_args = model_args
@@ -19,6 +24,7 @@ class Trainer:
         self.mix_precision = self.mix_precision and not train_args.get('accelerate', False)
         
         self.device = train_args['device']
+        print(f"Device: {self.device}")
         
         self.model = build_model(model_args)
         if self.is_float16:
@@ -39,6 +45,8 @@ class Trainer:
         if self.train_type == 'ddp':
             torch.cuda.set_device(self.device)  # master gpu takes up extra memory
             torch.cuda.empty_cache()
+            self.args = Args(world_size = train_args['world_size'], rank = self.device)
+            
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, 
                                                                    device_ids = [self.device], 
                                                                    find_unused_parameters=True)
@@ -231,9 +239,12 @@ def main_ddp(
 def ddp_train(train_args: dict, model_args: dict):
 
     # Each process control a single gpu
-    if train_args.get('accelerate') == True:
+    if train_args.get('accelerate', False) == True:
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
     world_size = torch.cuda.device_count()
+    print(f"World size: {world_size}")
+    train_args['world_size'] = world_size
+    
     mp.spawn(main_ddp, args=(world_size, train_args, model_args), nprocs=world_size)

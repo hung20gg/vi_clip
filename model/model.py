@@ -4,7 +4,7 @@ import numpy as np
 from .lossfn import sigliploss, cliploss
 from transformers import AutoTokenizer, AutoModel, AutoProcessor, CLIPImageProcessor
 import timm
-from .utils import mean_pooling, count_parameters, open_image, all_gather_default, print_detail, CLIPImage, CLIPText
+from .utils import mean_pooling, count_parameters, open_image, all_gather_default, print_detail, CLIPImage, CLIPText, AllGather
 from collections.abc import Iterable 
 import gc
 import os
@@ -111,7 +111,7 @@ class TextEncoder(nn.Module):
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)
     
-    def forward(self, images, texts, train_type = 'single', **kwargs):
+    def forward(self, images, texts, train_type = 'single', args= None, **kwargs):
         # texts: y_pred, images: y_train
         
         texts = self.encode_text(texts)
@@ -120,6 +120,8 @@ class TextEncoder(nn.Module):
         if train_type == 'ddp':
             images = all_gather_default(images, self.train_vision)
             texts = all_gather_default(texts, self.train_text)
+            # all_images = AllGather(images, args)
+            # all_texts = AllGather(texts, args)
             
         print_detail(images, 'images')
         print_detail(texts, 'texts')
