@@ -34,8 +34,8 @@ class ImageDataset(Dataset):
         file_name = self.imgs[idx]
         
         if self.is_trim:
-            folder = file_name[:-5]
-            image = file_name[-5:]
+            folder = file_name[:-self.trim_pos]
+            image = file_name[-self.trim_pos:]
             file_name = os.path.join(folder, image)
         
         if self.embedding_type == 'numpy':
