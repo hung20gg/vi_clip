@@ -22,7 +22,7 @@ def contrastive_loss(g_image_embeds, g_text_embeds, image_embeds, text_embeds):
     text_logits = torch.matmul(text_embeds, g_image_embeds.T)
     
     labels = torch.arange(img_logits.size(0)) + dist.get_rank() * img_logits.size(0)
-    
+    labels = labels.to(img_logits.device)
     # Contrastive loss (cross-entropy with ground-truth diagonal matching)
 
     loss_img = nn.CrossEntropyLoss()(img_logits, labels)  # image-to-text loss
