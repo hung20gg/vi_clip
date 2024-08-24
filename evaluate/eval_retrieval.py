@@ -107,7 +107,7 @@ def get_top_matches(image_embeddings, text_embeddings, top_k = 5):
 
 
 def save_embedding(file_name, embedding, path):
-    np.save(f'{path}/{file_name}.npy', embedding.cpu().detach().numpy())
+    np.save(f'{path}/{file_name}.npy', embedding)
 
 # Multithread
 def save_embeddings_in_parallel(file_names, embedding_batch, path):
@@ -121,8 +121,22 @@ def save_embeddings_in_parallel(file_names, embedding_batch, path):
         for future in futures:
             future.result()               
    
-from multiprocessing import Process, Queue, cpu_count        
+from multiprocessing import Process, Queue, cpu_count
+import multiprocessing as mp        
 # Function to save embeddings (consumer)
+
+def save_embeddings_in_parallel2(file_names, embedding_batch, path):
+
+    # with ThreadPoolExecutor() as executor:
+    #     futures = [
+    #         executor.submit(save_embedding, file_name, embedding_batch[j], path)
+    #         for j, file_name in enumerate(file_names)
+    #     ]
+    #     # Optionally wait for all threads to complete
+    #     for future in futures:
+    #         future.result()    
+    with mp.Pool(cpu_count()-1) as p:
+        p.starmap(save_embedding, [(file_names[i], embedding_batch[i], path) for i in range(len(file_names))])
 
 # Multiprocess multithread
 def save_embedding_consumer2(queue, path):
@@ -213,6 +227,7 @@ class EvaluateModel:
         dataloader = DataLoader(dataset, batch_size=self.eval_args['batch_size'], num_workers=self.eval_args['num_workers'], shuffle=False)
         
         # Encode text by batch
+        i = 0
         with torch.no_grad():
             for texts in tqdm(dataloader):
 
@@ -221,6 +236,7 @@ class EvaluateModel:
                     text_embeddings = text_batch
                 else:
                     text_embeddings = np.concatenate([text_embeddings, text_batch], axis=0)
+                i+=1
         return text_embeddings
     
     @staticmethod
@@ -234,6 +250,7 @@ class EvaluateModel:
         dataloader = DataLoader(dataset, batch_size=self.eval_args['batch_size'], num_workers=self.eval_args['num_workers'], shuffle=False)
         
         # Encode image by batch
+        i = 0
         with torch.no_grad():
             for images, ids in tqdm(dataloader):
                 # Open image
@@ -243,6 +260,7 @@ class EvaluateModel:
                     image_embeddings = image_batch
                 else:
                     image_embeddings = np.concatenate([image_embeddings, image_batch], axis=0)
+                i+=1
         return image_embeddings
     
     # For pre-embedding images and save the embeddings
@@ -255,8 +273,22 @@ class EvaluateModel:
         dataset = ImageDataset(self.dataset['images']['image'].values, 'image_string')
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=self.eval_args['num_workers'], shuffle=False)
         
+        embedding_batchs = None
+        file_namess = []
+        
         with torch.no_grad():
-            process_images_and_save(dataloader, self.model, path, num_workers=num_workers)
+            # process_images_and_save(dataloader, self.model, path, num_workers=num_workers)
+            for images, file_names in tqdm(dataloader):
+                embedding_batch = self.model.encode_image(images).cpu().detach().numpy()
+                # save_embeddings_in_parallel(file_names, embedding_batch, path)
+                if embedding_batchs is None:
+                    embedding_batchs = embedding_batch
+                else:
+                    embedding_batchs = np.concatenate([embedding_batchs, embedding_batch], axis=0)
+                file_namess += file_names
+        np.save(f'image_embeddings.npy', embedding_batchs)
+        pd.DataFrame({"filename":file_namess}).to_csv('image_names.csv', index=False)
+        # save_embeddings_in_parallel2(file_namess, embedding_batchs, path)
      
 
     def _evaluate(self, top_k = 5):
