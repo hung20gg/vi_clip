@@ -31,7 +31,7 @@ class ImageCaptionDataset(Dataset):
         label = self.descriptions[idx]
         return img, label
 
-class TensorCaptionDataset(TensorDataset):
+class TensorCaptionDataset(Dataset):
     def __init__(self, df, directory = '', type_ = 'numpy'):
         """Dataset with preprocessed embeddings
 
@@ -47,6 +47,9 @@ class TensorCaptionDataset(TensorDataset):
         
         # Embedding type
         self.load_type = type_
+    
+    def __len__(self):
+        return len(self.imgs)
         
     def __getitem__(self, index):
         embed_dir = os.path.join(self.directory, self.imgs[index])
@@ -56,7 +59,7 @@ class TensorCaptionDataset(TensorDataset):
             embed = torch.load(embed_dir)
         elif self.load_type == 'numpy':
             embed_dir = embed_dir.split('.')[0] + '.npy'
-            embed = np.load(embed_dir)
+            embed = torch.tensor(np.load(embed_dir))
         else:
             raise ValueError("Embedding type not supported")
         
