@@ -45,6 +45,7 @@ class CLIPModel(nn.Module):
 def train(rank, world_size, model, images, texts):
     # DDP setup
     setup_ddp(rank, world_size)
+    model.to(rank)
     model = DDP(model, device_ids=[rank])
     
     # Move data to the correct device
