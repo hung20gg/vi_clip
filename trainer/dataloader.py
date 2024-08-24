@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 
 class ImageCaptionDataset(Dataset):
-    def __init__(self, df, directory = ''):
+    def __init__(self, df, directory = '', trim = 0):
         """Dataset for image captioning
 
         Args:
@@ -18,6 +18,8 @@ class ImageCaptionDataset(Dataset):
         self.images_id = df['image_id'].values
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
+        self.trim_pos = 9 - trim
+        self.is_trim = trim != 0
         
         self.directory = directory
         self.descriptions = []
@@ -27,12 +29,17 @@ class ImageCaptionDataset(Dataset):
 
     def __getitem__(self, idx):
         img_dir = self.imgs[idx]
-        img = Image.open(os.path.join(self.directory, 'images', img_dir))
+        if self.is_trim:
+            folder = img_dir[:-self.trim_pos]
+            img_ = img_dir[-self.trim_pos:]
+            img = Image.open(os.path.join(self.directory, 'images', folder, img_))
+        else:
+            img = Image.open(os.path.join(self.directory, 'images', img_dir))
         label = self.descriptions[idx]
         return img, label
 
 class TensorCaptionDataset(Dataset):
-    def __init__(self, df, directory = '', type_ = 'numpy'):
+    def __init__(self, df, directory = '', type_ = 'numpy', trim = 0):
         """Dataset with preprocessed embeddings
 
         Args:
@@ -47,12 +54,21 @@ class TensorCaptionDataset(Dataset):
         
         # Embedding type
         self.load_type = type_
+        self.trim_pos = 9 - trim
+        self.is_trim = trim != 0
     
     def __len__(self):
         return len(self.imgs)
         
     def __getitem__(self, index):
-        embed_dir = os.path.join(self.directory, self.imgs[index])
+        img_dir = self.imgs[index]
+        
+        if self.is_trim:
+            folder = img_dir[:-self.trim_pos]
+            img_ = img_dir[-self.trim_pos:]
+            embed_dir = os.path.join(self.directory, folder, img_)
+        else:
+            embed_dir = os.path.join(self.directory, self.imgs[index])
         
         if self.load_type == 'torch':
             embed_dir = embed_dir.split('.')[0] + '.pt'

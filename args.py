@@ -17,6 +17,7 @@ training_args = {
     'intial_lr': 0.01,
     'num_workers': 6,
     'dataset': ['data/dfn_20', 'data/image_caption', 'data/sharegpt4v','data/wit'], # Directory of the dataset
+    'dataset_trim': [4,4,4,4],
     'image_folder': 'data/images', # Prefix for image folder (ignore for now)
     'data_type': 'numpy', # 'numpy' or 'images'
     'save_dir': 'checkpoints/text_model_base',

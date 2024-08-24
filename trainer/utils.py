@@ -52,6 +52,7 @@ def get_dataloader(train_args, model_args, train = True):
         list[(Dataloader, Sampler)]: Return list of dataloader and sampler for each dataset.
             If the training is not distributed, the sampler will be None.
     """
+    trim_pos = train_args.get('dataset_trim', 0)
     datasets = train_args['dataset']
     training_objective = model_args['model_type']
     batch_size = train_args['batch_size']
@@ -64,8 +65,12 @@ def get_dataloader(train_args, model_args, train = True):
     
     if isinstance(datasets, str):
         datasets = [datasets]
+    if isinstance(trim_pos, int):
+        trim_pos = [trim_pos] * len(datasets)
+        
+    assert len(datasets) == len(trim_pos), "Length of dataset and trim_pos should be the same"
     
-    for data in datasets:
+    for data, trim in zip(datasets, trim_pos):
         df = None
         
         for file in os.listdir(data):

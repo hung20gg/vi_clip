@@ -21,17 +21,25 @@ class TextDataset(Dataset):
     
     
 class ImageDataset(Dataset):
-    def __init__(self, images,  embedding_type = 'numpy'):
+    def __init__(self, images,  embedding_type = 'numpy', trim = 4):
         self.imgs = images
         self.embedding_type = embedding_type
+        self.trim_pos = 9 - trim
+        self.is_trim = trim != 0
         
     def __len__(self):
         return len(self.imgs)
     
     def __getitem__(self, idx):
         file_name = self.imgs[idx]
+        
+        if self.is_trim:
+            folder = file_name[:-5]
+            image = file_name[-5:]
+            file_name = os.path.join(folder, image)
+        
         if self.embedding_type == 'numpy':
-            file_name = file_name + '.npy'
+            file_name = file_name.replace('.jpg', '.npy')
             img = np.load(file_name)
             
         elif self.embedding_type == 'image_string':
@@ -106,15 +114,20 @@ def get_top_matches(image_embeddings, text_embeddings, top_k = 5):
     return img_text_scores, text_img_scores
 
 
-def save_embedding(file_name, embedding, path):
-    np.save(f'{path}/{file_name}.npy', embedding)
+def save_embedding(file_name, embedding, path, trim):
+    folder = file_name[:trim]
+    if not os.path.exists(f'{path}/{folder}'):
+        os.makedirs(f'{path}/{folder}')
+    
+    name = file_name[trim:]
+    np.save(f'{path}/{folder}/{name}.npy', embedding)
 
 # Multithread
-def save_embeddings_in_parallel(file_names, embedding_batch, path):
+def save_embeddings_in_parallel(file_names, embedding_batch, path, trim = 4):
 
     with ThreadPoolExecutor() as executor:
         futures = [
-            executor.submit(save_embedding, file_name, embedding_batch[j], path)
+            executor.submit(save_embedding, file_name, embedding_batch[j], path, trim)
             for j, file_name in enumerate(file_names)
         ]
         # Optionally wait for all threads to complete
@@ -122,40 +135,21 @@ def save_embeddings_in_parallel(file_names, embedding_batch, path):
             future.result()               
    
 from multiprocessing import Process, Queue, cpu_count
-import multiprocessing as mp        
-# Function to save embeddings (consumer)
 
-def save_embeddings_in_parallel2(file_names, embedding_batch, path):
-
-    # with ThreadPoolExecutor() as executor:
-    #     futures = [
-    #         executor.submit(save_embedding, file_name, embedding_batch[j], path)
-    #         for j, file_name in enumerate(file_names)
-    #     ]
-    #     # Optionally wait for all threads to complete
-    #     for future in futures:
-    #         future.result()    
-    with mp.Pool(cpu_count()-1) as p:
-        p.starmap(save_embedding, [(file_names[i], embedding_batch[i], path) for i in range(len(file_names))])
-
-# Multiprocess multithread
-def save_embedding_consumer2(queue, path):
-    while True:
-        file_names, embedding_batch = queue.get()
-        if file_names is None:
-            break  # Exit when a sentinel value (None) is received
-        save_embeddings_in_parallel(file_names, embedding_batch, path)
-        
-# Multiprocess single thread
-def save_embedding_consumer(queue, path):
+# Multiprocess
+def save_embedding_consumer(queue, path, trim):
     while True:
         file_name, embedding = queue.get()
         if file_name is None:
             break  # Exit when a sentinel value (None) is received
-        np.save(f'{path}/{file_name}.npy', embedding.cpu().detach().numpy())
+        # # Single thread
+        # save_embedding(file_name, embedding, path, trim)
+        
+        # Multithread
+        save_embeddings_in_parallel(file_name, embedding, path, trim)
 
 # Producer function that encodes images (main process)
-def process_images_and_save(dataloader, model, path, num_workers=None):
+def process_images_and_save(dataloader, model, path, num_workers=None, trim = 4):
     queue = Queue()
 
     # Determine number of workers (consumers) based on CPU cores if not provided
@@ -165,20 +159,29 @@ def process_images_and_save(dataloader, model, path, num_workers=None):
     # Start consumer processes
     consumer_processes = []
     for _ in range(num_workers):
-
-        p = Process(target=save_embedding_consumer, args=(queue, path))
+        
+        # Single thread
+        p = Process(target=save_embedding_consumer, args=(queue, path, trim))
+        
         p.start()
         consumer_processes.append(p)
 
     # Producer loop (encoding and putting into the queue)
     # Cache the embeddings 
-   
     i = 0
+    chunk_size = 64
     for images, file_names in tqdm(dataloader):
-        embedding_batch = model.encode_image(images)
-        for j, file_name in enumerate(file_names):
-            queue.put((file_name, embedding_batch[j]))
-        # queue.put((file_names, embedding_batch))  # Put embeddings in queue
+        i+=1
+        if i < 240:
+            continue
+        embedding_batch = model.encode_image(images).cpu().detach().numpy()
+        # # Single thread
+        # for j, file_name in enumerate(file_names):
+        #     queue.put((file_name, embedding_batch[j]))
+        
+        # # multithread
+        for i in range(0, len(file_names), chunk_size): # chunk the embeddings
+            queue.put((file_names[i:i+chunk_size], embedding_batch[i:i+chunk_size]))  # Put embeddings in queue
 
     # Signal the consumer processes to exit
     for _ in range(num_workers):
@@ -264,31 +267,29 @@ class EvaluateModel:
         return image_embeddings
     
     # For pre-embedding images and save the embeddings
-    def preembed_image(self, path = "data/embeddings", embedding_type = 'numpy', num_workers = 18):
+    def preembed_image(self, path = "data/embeddings", embedding_type = 'numpy', num_workers = 18, trim = 4):
 
         if not os.path.exists(path):
             os.makedirs(path)
-        
+            
+        print("=============Create folder=============")
+        for images in self.dataset['images']['image'].values:
+            folder_name = str(os.path.basename(images)[:trim])
+            if not os.path.exists(os.path.join(path, folder_name)):
+                os.makedirs(os.path.join(path, folder_name))
+
+        print("=============Create DataLoader=============")
         batch_size = self.eval_args['batch_size']
         dataset = ImageDataset(self.dataset['images']['image'].values, 'image_string')
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=self.eval_args['num_workers'], shuffle=False)
         
-        embedding_batchs = None
-        file_namess = []
+        # embedding_batchs = None
+        # file_namess = []
         
+        print("=============Encoding images=============")
         with torch.no_grad():
-            # process_images_and_save(dataloader, self.model, path, num_workers=num_workers)
-            for images, file_names in tqdm(dataloader):
-                embedding_batch = self.model.encode_image(images).cpu().detach().numpy()
-                # save_embeddings_in_parallel(file_names, embedding_batch, path)
-                if embedding_batchs is None:
-                    embedding_batchs = embedding_batch
-                else:
-                    embedding_batchs = np.concatenate([embedding_batchs, embedding_batch], axis=0)
-                file_namess += file_names
-        np.save(f'image_embeddings.npy', embedding_batchs)
-        pd.DataFrame({"filename":file_namess}).to_csv('image_names.csv', index=False)
-        # save_embeddings_in_parallel2(file_namess, embedding_batchs, path)
+            process_images_and_save(dataloader, self.model, path, num_workers=num_workers, trim=trim)
+ 
      
 
     def _evaluate(self, top_k = 5):
