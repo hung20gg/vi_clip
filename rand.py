@@ -67,8 +67,10 @@ def train(rank, world_size, model, images, texts):
     all_image_embeds = torch.cat(gathered_image_embeds, dim=0)
     all_text_embeds = torch.cat(gathered_text_embeds, dim=0)
     
-    all_image_embeds[dist.get_rank()] = image_embeds
-    all_text_embeds[dist.get_rank()] = text_embeds
+    print("Rank", dist.get_rank())
+    
+    # all_image_embeds[dist.get_rank()] = image_embeds
+    # all_text_embeds[dist.get_rank()] = text_embeds
     
     print(all_image_embeds.shape)
 
