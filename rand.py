@@ -12,19 +12,21 @@ def setup_ddp(rank, world_size):
     dist.init_process_group(backend="nccl", world_size=world_size, rank=rank)
     torch.cuda.set_device(rank)
 
+
 # Contrastive loss function (example implementation)
-def contrastive_loss(image_embeds, text_embeds):
+def contrastive_loss(g_image_embeds, g_text_embeds, image_embeds, text_embeds):
     # Normalize embeddings
-    image_embeds = nn.functional.normalize(image_embeds, p=2, dim=1)
-    text_embeds = nn.functional.normalize(text_embeds, p=2, dim=1)
-    
+
     # Calculate logits
-    logits = image_embeds @ text_embeds.T
+    img_logits = torch.matmul(image_embeds, g_text_embeds.T)
+    text_logits = torch.matmul(text_embeds, g_image_embeds.T)
+    
+    labels = torch.arange(img_logits.size(0)) + dist.get_rank() * img_logits.size(0)
     
     # Contrastive loss (cross-entropy with ground-truth diagonal matching)
-    labels = torch.arange(logits.size(0)).to(logits.device)
-    loss_img = nn.CrossEntropyLoss()(logits, labels)  # image-to-text loss
-    loss_txt = nn.CrossEntropyLoss()(logits.T, labels)  # text-to-image loss
+
+    loss_img = nn.CrossEntropyLoss()(img_logits, labels)  # image-to-text loss
+    loss_txt = nn.CrossEntropyLoss()(text_logits, labels)  # text-to-image loss
     
     return (loss_img + loss_txt) / 2
 
@@ -75,7 +77,7 @@ def train(rank, world_size, model, images, texts):
     print(all_image_embeds.shape)
 
     # Compute loss using all gathered embeddings
-    loss = contrastive_loss(all_image_embeds, all_text_embeds)
+    loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
 
     # Backpropagate and update model
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
