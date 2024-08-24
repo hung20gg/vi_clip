@@ -41,8 +41,7 @@ class Trainer:
             torch.cuda.empty_cache()
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, 
                                                                    device_ids = [self.device], 
-                                                                   find_unused_parameters=True,
-                                                                   mixed_precision=self.mix_precision)
+                                                                   find_unused_parameters=True)
            
         elif self.train_type == 'dp':
                 self.model = torch.nn.DataParallel(self.model).to(self.device)
