@@ -35,23 +35,38 @@ def tar_batch_and_push_to_huggingface(local_directory, repo_name, batch_size=250
     if type_ == 'images':
         image_files = [f for f in os.listdir(local_directory) if f.lower().endswith(('.png', '.jpg','.jpeg'))]
     elif type_ == 'numpy':
-        image_files = [f for f in os.listdir(local_directory) if f.lower().endswith('.npy')]
         
+        image_files = [f for f in os.listdir(local_directory) if f.lower().endswith('.npy')]
+    elif type_ == 'folder':
+        batch_size = 1
+        image_files = [f for f in os.listdir(local_directory) if os.path.isdir(os.path.join(local_directory, f))]
     # Process and upload in batches
     for i in range(0, len(image_files), batch_size):
         batch = image_files[i:i+batch_size]
         batch_number = i // batch_size + 1
         
-        # Create a temporary directory for this batch
         with tempfile.TemporaryDirectory() as temp_dir:
-            tar_filename = f"batch_{batch_number}.tar.gz"
-            tar_path = os.path.join(temp_dir, tar_filename)
-            
-            print(f"Creating tar file for batch {batch_number}: {tar_path}")
-            with tarfile.open(tar_path, "w:gz") as tar:
-                for file in tqdm(batch, desc=f"Adding files to tar (batch {batch_number})"):
-                    file_path = os.path.join(local_directory, file)
-                    tar.add(file_path, arcname=file)
+            if type_ == 'folder':
+                tar_filename = f"{batch[0]}.tar.gz"
+                tar_path = os.path.join(temp_dir, tar_filename)
+                
+                print(f"Loading embedding to {tar_path}")
+                numpy_files = [f for f in os.listdir(os.path.join(local_directory, batch[0])) if f.lower().endswith('.npy')]
+                with tarfile.open(tar_path, "w:gz") as tar:
+                    for file in tqdm(numpy_files, desc=f"Adding files to tar (batch {batch_number})"):
+                        file_path = os.path.join(local_directory, batch[0], file)
+                        tar.add(file_path, arcname=file)
+                        
+            else:
+                # Create a temporary directory for this batch
+                tar_filename = f"batch_{batch_number}.tar.gz"
+                tar_path = os.path.join(temp_dir, tar_filename)
+                
+                print(f"Creating tar file for batch {batch_number}: {tar_path}")
+                with tarfile.open(tar_path, "w:gz") as tar:
+                    for file in tqdm(batch, desc=f"Adding files to tar (batch {batch_number})"):
+                        file_path = os.path.join(local_directory, file)
+                        tar.add(file_path, arcname=file)
 
             print(f"Uploading batch {batch_number} to Hugging Face...")
 
@@ -68,7 +83,7 @@ def tar_batch_and_push_to_huggingface(local_directory, repo_name, batch_size=250
     print("All batches have been uploaded to Hugging Face.")
     
 
-def download_and_extract_batches(repo_name, local_directory, folder_name = "images", ending='.tar.gz'):
+def download_and_extract_batches(repo_name, local_directory, folder_name = "images", keep_folder = False, ending='.tar.gz'):
     # Initialize Hugging Face API
     start = time.time()
     api = HfApi()
@@ -119,8 +134,15 @@ def download_and_extract_batches(repo_name, local_directory, folder_name = "imag
             )
 
             # Extract the tar file
-            with tarfile.open(tar_path, 'r:gz') as tar:
-                tar.extractall(path=images_directory)
+            if keep_folder:
+                folder_name = tar_file.split('.')[0]
+                images_directory = os.path.join(local_directory, folder_name)
+                os.makedirs(images_directory, exist_ok=True)
+                with tarfile.open(tar_path, 'r:gz') as tar:
+                    tar.extractall(path=images_directory)
+            else:
+                with tarfile.open(tar_path, 'r:gz') as tar:
+                    tar.extractall(path=images_directory)
 
         print(f"Extracted {tar_file} to {images_directory}")
 
