@@ -111,25 +111,27 @@ class TextEncoder(nn.Module):
         emb_norm = torch.norm(emb_text, dim=1, keepdim=True)
         return emb_text / (emb_norm + 1e-8)
     
-    def forward(self, images, texts, train_type = 'single', args= None, **kwargs):
+    def forward(self, images, texts, train_type = 'single', **kwargs):
         # texts: y_pred, images: y_train
         
         texts = self.encode_text(texts)
         images = torch.tensor(images).to(self.device)
-        
-        if train_type == 'ddp':
-            images = all_gather_default(images, self.train_vision)
-            texts = all_gather_default(texts, self.train_text)
-            # all_images = AllGather(images, args)
-            # all_texts = AllGather(texts, args)
+                
+        # Softmax loss + DDP
+        if train_type == 'ddp' and self.loss_type != 'sigmoid': # Activate all_gather for DDP
+            all_images = all_gather_default(images, self.train_vision)
+            all_texts  = all_gather_default(texts, self.train_text)
             
-        print_detail(images, 'images')
-        print_detail(texts, 'texts')
+            print_detail(all_images, 'images')
+            print_detail(all_texts, 'texts')
+
+            return self.loss_fn(images, texts, all_images, all_texts)
         
         if self.loss_type != 'sigmoid':
             return self.loss_fn(images, texts)
-        else:
-            return self.loss_fn(images, texts, self.logit_scale, self.logit_bias)        
+        
+        # Sigmoid loss + DDP
+        return self.loss_fn(images, texts, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp')        
 
 class CLIP(nn.Module):
     """
@@ -313,11 +315,21 @@ class CLIP(nn.Module):
         image_embed = self.encode_image(images)
         text_embed = self.encode_text(texts)
         
-        if train_type == 'ddp':
-            image_embed = all_gather_default(image_embed, self.train_vision)
-            text_embed  = all_gather_default(text_embed, self.train_text)  
+        # Softmax loss + DDP
+        if train_type == 'ddp' and self.loss_type != 'sigmoid': # Activate all_gather for DDP
+            all_images = all_gather_default(image_embed, self.train_vision)
+            all_texts  = all_gather_default(text_embed, self.train_text)
+            
+            print_detail(all_images, 'images')
+            print_detail(all_texts, 'texts')
+
+            return self.loss_fn(image_embed, text_embed, all_images, all_texts)
         
-        return self.loss_fn(image_embed, text_embed)
+        if self.loss_type != 'sigmoid':
+            return self.loss_fn(image_embed, text_embed)
+        
+        # Sigmoid loss + DDP
+        return self.loss_fn(image_embed, text_embed, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp')        
     
 
 class SigLIP(CLIP):
