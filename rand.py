@@ -161,6 +161,9 @@ def train(rank, world_size, model, images, texts, all_gather=False, loss_ = 'sig
     # loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
     if loss_ == 'siglip':
         loss = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=all_gather)
+        loss2 = sigliploss(image_embeds, text_embeds, ddp=False, all_gather=not all_gather)
+        print("Loss 2", loss2)
+        print("Loss 1", loss)
     else:
         gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
         gathered_text_embeds = [torch.zeros_like(text_embeds) for _ in range(world_size)]
