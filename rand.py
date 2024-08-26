@@ -5,6 +5,7 @@ import torch.nn as nn
 import os
 from torch.nn.parallel import DistributedDataParallel as DDP
 import argparse
+import time
 
 
 # Initialize process group
@@ -168,6 +169,8 @@ def train(rank, world_size, model, images, texts, all_gather=False, loss_ = 'sig
     with torch.no_grad():
         if loss_ == 'siglip':
             loss = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=all_gather)
+            time.sleep(10)
+            
             loss2 = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=not all_gather)
             print("Loss 2", loss2)
             print("Loss 1", loss)
