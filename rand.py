@@ -62,7 +62,7 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
             
             nll = - torch.sum(loglik)
             print(all_gather, f"Rank {rank} received image embed from rank {i}, loss: ", torch.mean(nll))
-            
+            time.sleep(1)
             if loss is None:
                 loss = torch.mean(nll)
             else:
@@ -102,6 +102,7 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
                 loglik = torch.nn.functional.logsigmoid(- logits)
                 nll = - torch.sum(loglik)
                 loss += torch.mean(nll)
+                time.sleep(1)
                 
                 print(all_gather, f"Rank {rank} received image embed from rank {i}, loss: ", torch.mean(nll))
                 # print('2 neighbors', (image_embed + neighbor_image_embed)[:,:10])
@@ -219,7 +220,10 @@ if __name__ == "__main__":
 
     # Example image and text input tensors (random for demonstration)
     images = torch.randn(batch_size_per_node, 512)
-    texts = torch.randn(batch_size_per_node, 512)
+    texts = torch.randn(batch_size_per_node, 512) * 2 - 1
+    
+    print("Images", images[:5,:10])
+    print("Texts", texts[:5,:10])
 
     # Initialize a simple CLIP-like model
     model = CLIPModel(embed_dim)
