@@ -69,7 +69,7 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
             else: # Send the image embed to other processes
                 print(f"Rank {rank} is here, shape: {image_embed.shape}")
                 print(image_embed[:,:10])
-                torch.distributed.broadcast(image_embed, i)
+                torch.distributed.broadcast(image_embed, rank)
     
     print("Loss", loss)
     return loss
@@ -105,6 +105,9 @@ def train(rank, world_size, model, images, texts):
     if rank == 1:
         image_embeds = image_embeds * 2
         text_embeds = text_embeds * 2
+        
+    print("Rank",rank)
+    print(image_embeds[:,:10])
 
     # Gather embeddings from all processes (all_gather)
     # gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
