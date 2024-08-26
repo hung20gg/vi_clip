@@ -17,16 +17,21 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
     if ddp: # DDP
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
+        
+        # Send local embeddings to all processes
+        torch.distributed.broadcast(image_embed, rank)
         # Go through all processes and get the image embed
         for i in range(world_size):
             if i != rank:
+                
                 # Get image embed from other processes
                 neighbor_image_embed = torch.empty_like(image_embed)
                 torch.distributed.broadcast(neighbor_image_embed, i)
                 
                 logits = torch.matmul(neighbor_image_embed, text_embed.t()) * logit_scale + logit_bias
-                m1_diag1 = - torch.ones_like(logits) + 2 * labels
-                loglik = F.logsigmoid(logits * m1_diag1)
+
+                # No need to calculate the diagonal 1
+                loglik = F.logsigmoid( - logits)
                 nll = - torch.sum(loglik)
                 loss += torch.mean(nll)
     

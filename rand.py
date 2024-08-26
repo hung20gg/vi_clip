@@ -93,7 +93,8 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
                 
                 logits = torch.matmul(neighbor_image_embed, text_embed.t()) * logit_scale + logit_bias
                 
-                loglik = torch.nn.functional.logsigmoid(logits * m1_diag1)
+                # No need to calculate the diagonal 1
+                loglik = torch.nn.functional.logsigmoid(- logits)
                 nll = - torch.sum(loglik)
                 loss += torch.mean(nll)
                 # print('2 neighbors', (image_embed + neighbor_image_embed)[:,:10])
@@ -136,7 +137,7 @@ def train(rank, world_size, model, images, texts, all_gather=False):
         image_embeds = image_embeds * 2
         text_embeds = text_embeds * 2
         
-    print(f"_________\nRank",rank, image_embeds[:,:10])
+    # print(f"_________\nRank",rank, image_embeds[:,:10])
 
     # Gather embeddings from all processes (all_gather)
     # gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
