@@ -5,7 +5,7 @@
 """
 training_args = {
     'train_type':'single', # 'single', 'ddp' or 'dp'
-    'mix_precision': False,
+    'mixed_precision': False,
     'device': 'cuda',
     'lr': 5e-4,
     'weight_decay': 1e-3,
@@ -40,13 +40,13 @@ eval_args = {
     'is_eval': True,
     'batch_size': 2048,
     'num_workers': 6,
-    'dataset': ['imagenet1k'],
+    'dataset': 'imagenet1k',
 }
 
 def parse_to_train_model_eval_args(args):
     training_args = {
         'train_type': args.train_type,
-        'mix_precision': args.mix_precision,
+        'mixed_precision': args.mixed_precision,
         'device': args.device,
         'lr': args.lr,
         'weight_decay': args.weight_decay,

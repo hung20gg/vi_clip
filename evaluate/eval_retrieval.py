@@ -21,10 +21,10 @@ class TextDataset(Dataset):
     
     
 class ImageDataset(Dataset):
-    def __init__(self, images,  embedding_type = 'numpy', trim = 4):
+    def __init__(self, images,  embedding_type = 'image', trim = 0):
         self.imgs = images
         self.embedding_type = embedding_type
-        self.trim_pos = 9 - trim
+        self.trim_pos = trim
         self.is_trim = trim != 0
         
     def __len__(self):
@@ -34,12 +34,12 @@ class ImageDataset(Dataset):
         file_name = self.imgs[idx]
         
         if self.is_trim:
-            folder = file_name[:-self.trim_pos]
-            image = file_name[-self.trim_pos:]
+            folder = file_name[:self.trim_pos]
+            image = file_name[self.trim_pos:]
             file_name = os.path.join(folder, image)
         
         if self.embedding_type == 'numpy':
-            file_name = file_name.replace('.jpg', '.npy')
+            file_name = file_name.split('.')[0] + '.npy'
             img = np.load(file_name)
             
         elif self.embedding_type == 'image_string':
@@ -60,10 +60,7 @@ def get_dataset(directory = 'data/evaluate/imagenet'):
     for file in os.listdir(directory):
         if file.endswith('.parquet'):
             image_text = pd.read_parquet(os.path.join(directory, file))
-            
-            # Test the original language
-            # image_text.drop(columns=['caption'], inplace=True)
-            # image_text.rename(columns={'original': 'caption'}, inplace=True)
+
             break
     
     image_text['image_id'] = pd.factorize(image_text['image'])[0]
@@ -167,13 +164,9 @@ def process_images_and_save(dataloader, model, path, num_workers=None, trim = 4)
         consumer_processes.append(p)
 
     # Producer loop (encoding and putting into the queue)
-    # Cache the embeddings 
-    i = 0
     chunk_size = 64
     for images, file_names in tqdm(dataloader):
-        i+=1
-        if i < 240:
-            continue
+
         embedding_batch = model.encode_image(images).cpu().detach().numpy()
         # # Single thread
         # for j, file_name in enumerate(file_names):
@@ -267,7 +260,7 @@ class EvaluateModel:
         return image_embeddings
     
     # For pre-embedding images and save the embeddings
-    def preembed_image(self, path = "data/embeddings", embedding_type = 'numpy', num_workers = 18, trim = 4):
+    def preembed_image(self, path = "data/embeddings", embedding_type = 'numpy', num_workers = 6, trim = 4):
 
         if not os.path.exists(path):
             os.makedirs(path)
@@ -280,7 +273,7 @@ class EvaluateModel:
 
         print("=============Create DataLoader=============")
         batch_size = self.eval_args['batch_size']
-        dataset = ImageDataset(self.dataset['images']['image'].values, 'image_string')
+        dataset = ImageDataset(self.dataset['images']['image'].values, 'image_string', trim = 0)
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=self.eval_args['num_workers'], shuffle=False)
         
         # embedding_batchs = None
@@ -289,6 +282,7 @@ class EvaluateModel:
         print("=============Encoding images=============")
         with torch.no_grad():
             process_images_and_save(dataloader, self.model, path, num_workers=num_workers, trim=trim)
+            
  
      
 

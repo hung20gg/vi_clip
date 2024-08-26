@@ -16,7 +16,7 @@ def parse_args():
     
     # Training arguments
     parser.add_argument('--train_type', type=str, default=training_args['train_type'], help='Training type')
-    parser.add_argument('--mix_precision', type=bool, default=training_args['mix_precision'], help='Mixed precision training')
+    parser.add_argument('--mixed_precision', type=bool, default=training_args['mixed_precision'], help='Mixed precision training')
     parser.add_argument('--device', type=str, default=training_args['device'], help='Device')
     parser.add_argument('--lr', type=float, default=training_args['lr'], help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=training_args['weight_decay'], help='Weight decay')
@@ -47,7 +47,7 @@ def parse_args():
     parser.add_argument('--is_eval', type=bool, help='Evaluate model')
     parser.add_argument('--eval_batch_size', type=int, default=eval_args['batch_size'], help='Evaluation batch size')
     parser.add_argument('--eval_num_workers', type=int, default=eval_args['num_workers'], help='Number of workers for evaluation')
-    parser.add_argument('--eval_dataset', nargs='+', default=eval_args['dataset'], help='Evaluation dataset')
+    parser.add_argument('--eval_dataset', type=str, default=eval_args['dataset'], help='Evaluation dataset')
     
     return parser.parse_args()
 

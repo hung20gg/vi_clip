@@ -1,23 +1,36 @@
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
-from .utils import all_gather_default
+from .utils import all_gather_default, DisCoGather
 
 """ 
 All gather version of sigliploss
 
 """
-def sigliploss_allgather(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, **kwargs):
+def sigliploss_allgather(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, all_gather_implement = 'disco', require_grad = False, **kwargs):
     
     world_size = torch.distributed.get_world_size()
     rank = torch.distributed.get_rank()
     
-    tensor_list = [torch.empty_like(image_embed) for _ in range(world_size)]
-    torch.distributed.all_gather(tensor_list, image_embed)
+    # Only need to gather the gradients of one embedding, in this case is the image embeddings
+    if not require_grad: # No need to gather the gradients of the image embeddings
+        tensor_list = [torch.empty_like(image_embed) for _ in range(world_size)]
+        torch.distributed.all_gather(tensor_list, image_embed)
+    else:
+        if all_gather_implement == 'disco':
+            tensor_list = DisCoGather.apply(image_embed)
+        else:
+            tensor_list = all_gather_default(image_embed, train=True)
+    
     loss = None
     
     for i in range(world_size):
-        neighbor_image_embed = tensor_list[i]
+        if not require_grad:
+            neighbor_image_embed = tensor_list[i]
+        else:
+            bs = image_embed.size(0)
+            neighbor_image_embed = tensor_list[i*bs:(i+1)*bs, :]
+            
         logits = torch.matmul(neighbor_image_embed, text_embed.t()) * logit_scale + logit_bias
         labels = torch.eye(neighbor_image_embed.size(0)).to(text_embed.device)
         m1_diag1 = - torch.ones_like(logits) + 2 * labels * (1 if i == rank else 0)
@@ -33,7 +46,7 @@ def sigliploss_allgather(image_embed, text_embed, logit_scale = 1.0, logit_bias 
     return loss
 
 
-def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp=False, **kwargs):
+def sigliploss_broadcast(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp=False, **kwargs):
     
     labels = torch.eye(image_embed.size(0)).to(image_embed.device)
     logits = torch.matmul(image_embed, text_embed.t()) * logit_scale + logit_bias
@@ -47,7 +60,6 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
         
-        # I dont know is this code optimized
         # Send local embeddings to all processes
         torch.distributed.broadcast(image_embed, rank)
         # Go through all processes and get the image embed
@@ -67,17 +79,33 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
         torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.AVG)
     return loss
 
-def cliploss(image_embed, text_embed, temperature = 1/0.07, ddp = False, **kwargs):
+def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp = False, all_gather = False, all_gather_implement = 'disco', require_gard = False):
+    
+    if not ddp and all_gather == True:
+        raise ValueError("All gather can only be used with DDP")
+    
+    if all_gather:
+        return sigliploss_allgather(image_embed, text_embed, logit_scale = logit_scale, logit_bias = logit_bias, all_gather_implement = all_gather_implement, require_grad = require_gard)
+    else:
+        return sigliploss_broadcast(image_embed, text_embed, logit_scale = logit_scale, logit_bias = logit_bias, ddp = ddp)
+    
+
+def cliploss(image_embed, text_embed, temperature = 1/0.07, ddp = False, require_grad_image = False, require_grad_text = True, all_gather_implement = 'disco', **kwargs):
     loss_img = nn.CrossEntropyLoss()
     loss_txt = nn.CrossEntropyLoss()
 
     # Do contrastive loss on local - global embeddings (diag 1 shifted by the current rank)
     if ddp:
+        # Picking the implementation of all gather
         rank = torch.distributed.get_rank() 
+        if all_gather_implement == 'disco':
+            all_image_embed = DisCoGather.apply(image_embed)
+            all_text_embed = DisCoGather.apply(text_embed)
+        else:   
+            all_image_embed = all_gather_default(image_embed, train=require_grad_image)
+            all_text_embed = all_gather_default(text_embed, train=require_grad_text)
         
-        all_image_embed = all_gather_default(image_embed)
-        all_text_embed = all_gather_default(text_embed)
-        
+        # Calculate the logits
         logits_image = torch.matmul(image_embed, all_text_embed.t()) * torch.exp(temperature)
         logits_text = torch.matmul(text_embed, all_image_embed.t()) * torch.exp(temperature)
         label = torch.arange(all_image_embed.size(0)) + rank * all_image_embed.size(0)

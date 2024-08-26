@@ -38,6 +38,7 @@ class CrossLingual2:
         self.text_model = TextEncoder(text_model, max_length, 'mse', projection_dim = self.projection_dim , device=self.device)
         self.text_tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
         self.encode_text = self.text_model.encode_text
+        
     def encode_clip_text(self, text):
         inputs = self.clip_tokenizer(text=text, max_length = self.text_model.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
 
@@ -197,14 +198,10 @@ class CrossLingual(nn.Module):
         text_embed = self.encode_text(texts)
         return image_embed, text_embed
         
-    def forward(self, text_1, text_2, train_type = 'clip', **kwargs):
+    def forward(self, text_1, text_2, train_type = 'single', **kwargs):
         
         y_pred = self.encode_text(text_1)
         y_true = self.encode_clip_text(text_2)
-        
-        if train_type == 'ddp':
-            y_pred = all_gather_default(y_pred, self.train_text)
-            y_true = all_gather_default(y_true, self.train_clip_text)
         
         return self.loss_fn(y_pred, y_true)
     
@@ -236,6 +233,7 @@ class mCLIP(CrossLingual):
             self.logit_scale_it = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
             self.logit_bias_it  = nn.Parameter(torch.ones(1) * init_bias)
         else:
+            self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.tensor(1/0.07)))
             self._loss_fn = cliploss
         self.lambda_ = lambda_
         
@@ -257,7 +255,7 @@ class mCLIP(CrossLingual):
         num_params = count_parameters(self)
         print(f'Number of parameters: {num_params}')
         
-    def forward(self, image, text_1, text_2):
+    def forward(self, image, text_1, text_2, train_type = 'single', **kwargs):
         assert self.vision, 'Vision model is not loaded'
         
         image_embed = self.encode_image(image)
@@ -265,11 +263,11 @@ class mCLIP(CrossLingual):
         text_embed = self.encode_text(text_1)
         
         if self.siglip:
-            TTloss = self._loss_fn(image_embed, text_embed_clip, self.logit_scale_tt, self.logit_bias_tt)
-            ITloss = self._loss_fn(image_embed, text_embed, self.logit_scale_it, self.logit_bias_it)
+            TTloss = self._loss_fn(image_embed, text_embed_clip, self.logit_scale_tt, self.logit_bias_tt, ddp = train_type == 'ddp')
+            ITloss = self._loss_fn(image_embed, text_embed, self.logit_scale_it, self.logit_bias_it, ddp = train_type == 'ddp')
         else:
-            TTloss = self._loss_fn(text_embed, text_embed_clip)
-            ITloss = self._loss_fn(image_embed, text_embed)
+            TTloss = self._loss_fn(text_embed, text_embed_clip, temperature=self.logit_scale, ddp = train_type == 'ddp')
+            ITloss = self._loss_fn(image_embed, text_embed, temperature=self.logit_scale, ddp = train_type == 'ddp')
         
         return ITloss + self.lambda_ * TTloss
         

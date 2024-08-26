@@ -79,13 +79,15 @@ def get_dataloader(train_args, model_args, train = True):
         assert df is not None, "No parquet file found in the directory"
         
         # Load the embeddings
-        if model_args.get('data_type', 'images') == 'numpy':
-            dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy')
+        if model_args.get('data_type', 'images') == 'numpy' or train_args.get('data_type', 'images') == 'numpy':
+            print("Loading numpy files")
+            dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim)
         
         else:
+            print("Loading images")
             # Load the images
-            if training_objective in ['clip','siglip','lit','siglit']:
-                dataset = ImageCaptionDataset(df, os.path.join(data, 'images'))
+            if training_objective in ['clip','siglip','lit','siglit', 'text_clip', 'text_siglip']:
+                dataset = ImageCaptionDataset(df, os.path.join(data, 'images'), trim = trim)
                 # sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
             elif training_objective == 'crosslingual':
                 

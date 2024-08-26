@@ -44,6 +44,7 @@ class TextEncoder(nn.Module):
             
         elif model_type in ['clip', 'lit', 'text_clip', 'text_lit']:
             self.loss_fn = cliploss
+            self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.tensor(1/0.07)))
             self.loss_type = 'softmax'
             
         else:
@@ -118,9 +119,9 @@ class TextEncoder(nn.Module):
         images = torch.tensor(images).to(self.device)
                 
         if self.loss_type == 'sigmoid':
-            return self.loss_fn(images, texts, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp')
+            return self.loss_fn(images, texts, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp', **kwargs)
         else:
-            return self.loss_fn(images, texts, ddp = train_type == 'ddp')
+            return self.loss_fn(images, texts, temperature= self.logit_scale , ddp = train_type == 'ddp', **kwargs)
 class CLIP(nn.Module):
     """
 
@@ -149,7 +150,7 @@ class CLIP(nn.Module):
         self.train_text = False
         self.train_vision = False
         self.device = None
-        
+        self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.tensor(1/0.07)))
         self.max_length = max_length
         if is_load:
             self.load_model(vision_model, text_model, pretrain, projection_dim)
@@ -304,7 +305,7 @@ class CLIP(nn.Module):
         text_embed = self.encode_text(texts)
         
         # Softmax loss + DDP
-        return self.loss_fn(image_embed, text_embed, ddp = train_type == 'ddp')
+        return self.loss_fn(images, texts, temperature= self.logit_scale , ddp = train_type == 'ddp', **kwargs)
 
 class SigLIP(CLIP):
     """ Similar to CLIP but with a different loss function."""

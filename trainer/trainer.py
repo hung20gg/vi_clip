@@ -20,7 +20,7 @@ class Trainer:
         
         self.is_float16 = train_args.get('float16', False)
         self.train_type = train_args['train_type']
-        self.mix_precision = train_args.get('mix_precision', False) and not self.is_float16
+        self.mix_precision = train_args.get('mixed_precision', False) and not self.is_float16
         self.mix_precision = self.mix_precision and not train_args.get('accelerate', False)
         
         self.device = train_args['device']
@@ -106,10 +106,10 @@ class Trainer:
                 
     def _forward_pass(self, images=None, texts_1=None, texts_2=None):
         if texts_2 is None:
-            return self.model(images, texts_1)
+            return self.model(images, texts_1, train_type = self.train_type)
         if images is None:
-            return self.model(texts_1, texts_2)
-        return self.model(images, texts_1, texts_2)
+            return self.model(texts_1, texts_2, train_type = self.train_type)
+        return self.model(images, texts_1, texts_2, train_type = self.train_type)
     
     def _unfreeze_text(self):
         self.train_projection = False

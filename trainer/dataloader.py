@@ -18,7 +18,7 @@ class ImageCaptionDataset(Dataset):
         self.images_id = df['image_id'].values
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
-        self.trim_pos = 9 - trim
+        self.trim_pos = trim
         self.is_trim = trim != 0
         
         self.directory = directory
@@ -30,11 +30,11 @@ class ImageCaptionDataset(Dataset):
     def __getitem__(self, idx):
         img_dir = self.imgs[idx]
         if self.is_trim:
-            folder = img_dir[:-self.trim_pos]
-            img_ = img_dir[-self.trim_pos:]
-            img = Image.open(os.path.join(self.directory, 'images', folder, img_))
+            folder = img_dir[:self.trim_pos]
+            img_ = img_dir[self.trim_pos:]
+            img = Image.open(os.path.join(self.directory, folder, img_))
         else:
-            img = Image.open(os.path.join(self.directory, 'images', img_dir))
+            img = Image.open(os.path.join(self.directory, img_dir))
         label = self.descriptions[idx]
         return img, label
 
@@ -54,7 +54,7 @@ class TensorCaptionDataset(Dataset):
         
         # Embedding type
         self.load_type = type_
-        self.trim_pos = 9 - trim
+        self.trim_pos = trim
         self.is_trim = trim != 0
     
     def __len__(self):
@@ -64,11 +64,11 @@ class TensorCaptionDataset(Dataset):
         img_dir = self.imgs[index]
         
         if self.is_trim:
-            folder = img_dir[:-self.trim_pos]
-            img_ = img_dir[-self.trim_pos:]
+            folder = img_dir[:self.trim_pos]
+            img_ = img_dir[self.trim_pos:]
             embed_dir = os.path.join(self.directory, folder, img_)
         else:
-            embed_dir = os.path.join(self.directory, self.imgs[index])
+            embed_dir = os.path.join(self.directory, img_dir)
         
         if self.load_type == 'torch':
             embed_dir = embed_dir.split('.')[0] + '.pt'
