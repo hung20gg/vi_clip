@@ -1,5 +1,6 @@
 import torch
 import torch.distributed as dist
+import torch.distributed
 import torch.nn as nn
 import os
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -31,6 +32,45 @@ def contrastive_loss(g_image_embeds, g_text_embeds, image_embeds, text_embeds):
     return (loss_img + loss_txt) / 2
 
 # Example CLIP model (simplified)
+
+def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp=False):
+    
+    
+    labels = torch.eye(image_embed.size(0)).to(image_embed.device)
+    logits = torch.matmul(image_embed, text_embed.t()) * logit_scale + logit_bias
+    m1_diag1 = - torch.ones_like(logits) + 2 * labels
+    
+    loglik = torch.nn.functional.logsigmoid(logits * m1_diag1)
+    nll = - torch.sum(loglik)
+    loss = torch.mean(nll)
+    
+    if ddp: # DDP
+        world_size = torch.distributed.get_world_size()
+        rank = torch.distributed.get_rank()
+        # Go through all processes and get the image embed
+        
+        print(f"World size in forward model: {world_size}")
+        
+        for i in range(world_size):
+            if i != rank: # Receive the image embed from other processes
+                # Get image embed from other processes
+                neighbor_image_embed = torch.empty_like(image_embed)
+                torch.distributed.broadcast(neighbor_image_embed, i)
+                print(neighbor_image_embed[:,:10])
+                
+                logits = torch.matmul(neighbor_image_embed, text_embed.t()) * logit_scale + logit_bias
+                m1_diag1 = - torch.ones_like(logits) + 2 * labels
+                loglik = F.logsigmoid(logits * m1_diag1)
+                nll = - torch.sum(loglik)
+                loss += torch.mean(nll)
+                
+            else: # Send the image embed to other processes
+                print(f"Rank {rank} is here")
+                print(image_embed[:,:10])
+                torch.distributed.broadcast(image_embed, i)
+    
+    return loss
+
 class CLIPModel(nn.Module):
     def __init__(self, embed_dim):
         super(CLIPModel, self).__init__()
@@ -59,25 +99,27 @@ def train(rank, world_size, model, images, texts):
     text_embeds = model.module.encode_text(texts)
 
     # Gather embeddings from all processes (all_gather)
-    gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
-    gathered_text_embeds = [torch.zeros_like(text_embeds) for _ in range(world_size)]
+    # gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
+    # gathered_text_embeds = [torch.zeros_like(text_embeds) for _ in range(world_size)]
     
-    dist.all_gather(gathered_image_embeds, image_embeds)
-    dist.all_gather(gathered_text_embeds, text_embeds)
+    # dist.all_gather(gathered_image_embeds, image_embeds)
+    # dist.all_gather(gathered_text_embeds, text_embeds)
 
-    # Concatenate the gathered embeddings
-    all_image_embeds = torch.cat(gathered_image_embeds, dim=0)
-    all_text_embeds = torch.cat(gathered_text_embeds, dim=0)
+    # # Concatenate the gathered embeddings
+    # all_image_embeds = torch.cat(gathered_image_embeds, dim=0)
+    # all_text_embeds = torch.cat(gathered_text_embeds, dim=0)
     
-    print("Rank", dist.get_rank())
+    # print("Rank", dist.get_rank())
     
-    # all_image_embeds[dist.get_rank()] = image_embeds
-    # all_text_embeds[dist.get_rank()] = text_embeds
+    # # all_image_embeds[dist.get_rank()] = image_embeds
+    # # all_text_embeds[dist.get_rank()] = text_embeds
     
-    print(all_image_embeds.shape)
+    # print(all_image_embeds.shape)
 
-    # Compute loss using all gathered embeddings
-    loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
+    # # Compute loss using all gathered embeddings
+    # loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
+    
+    loss = sigliploss(image_embeds, text_embeds, ddp=True)
 
     # Backpropagate and update model
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
