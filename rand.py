@@ -85,7 +85,7 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
         # Go through all processes and get the image embed
         
         print(f"World size in forward model: {world_size}")
-        print(all_gather, f"Rank {rank} received image embed from rank {rank}, loss: ", loss)
+        print(not all_gather, f"Rank {rank} received image embed from rank {rank}, loss: ", loss)
         torch.distributed.broadcast(image_embed, rank)
         
         for i in range(world_size):
@@ -102,13 +102,12 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
                 nll = - torch.sum(loglik)
                 loss += torch.mean(nll)
                 
-                print(all_gather, f"Rank {rank} received image embed from rank {i}, loss: ", torch.mean(nll))
+                print(not all_gather, f"Rank {rank} received image embed from rank {i}, loss: ", torch.mean(nll))
                 # print('2 neighbors', (image_embed + neighbor_image_embed)[:,:10])
                 
             # else: # Send the image embed to other processes
             #     print(f"___________\nRank {rank} is here, shape: {image_embed.shape}", image_embed[:,:10])
     
-    print("Loss", loss)
     return loss
 
 class CLIPModel(nn.Module):
