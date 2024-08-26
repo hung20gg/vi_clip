@@ -101,6 +101,10 @@ def train(rank, world_size, model, images, texts):
     print("Rank",rank, "Embedding image and text")
     image_embeds = model.module.encode_image(images)
     text_embeds = model.module.encode_text(texts)
+    
+    if rank == 1:
+        image_embeds = image_embeds * 2
+        text_embeds = text_embeds * 2
 
     # Gather embeddings from all processes (all_gather)
     # gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
