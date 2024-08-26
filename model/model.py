@@ -117,22 +117,10 @@ class TextEncoder(nn.Module):
         texts = self.encode_text(texts)
         images = torch.tensor(images).to(self.device)
                 
-        # Softmax loss + DDP
-        if train_type == 'ddp' and self.loss_type != 'sigmoid': # Activate all_gather for DDP
-            all_images = all_gather_default(images, self.train_vision)
-            all_texts  = all_gather_default(texts, self.train_text)
-            
-            print_detail(all_images, 'images')
-            print_detail(all_texts, 'texts')
-
-            return self.loss_fn(images, texts, all_images, all_texts)
-        
-        if self.loss_type != 'sigmoid':
-            return self.loss_fn(images, texts)
-        
-        # Sigmoid loss + DDP
-        return self.loss_fn(images, texts, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp')        
-
+        if self.loss_type == 'sigmoid':
+            return self.loss_fn(images, texts, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp')
+        else:
+            return self.loss_fn(images, texts, ddp = train_type == 'ddp')
 class CLIP(nn.Module):
     """
 
@@ -316,21 +304,7 @@ class CLIP(nn.Module):
         text_embed = self.encode_text(texts)
         
         # Softmax loss + DDP
-        if train_type == 'ddp' and self.loss_type != 'sigmoid': # Activate all_gather for DDP
-            all_images = all_gather_default(image_embed, self.train_vision)
-            all_texts  = all_gather_default(text_embed, self.train_text)
-            
-            print_detail(all_images, 'images')
-            print_detail(all_texts, 'texts')
-
-            return self.loss_fn(image_embed, text_embed, all_images, all_texts)
-        
-        if self.loss_type != 'sigmoid':
-            return self.loss_fn(image_embed, text_embed)
-        
-        # Sigmoid loss + DDP
-        return self.loss_fn(image_embed, text_embed, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp')        
-    
+        return self.loss_fn(image_embed, text_embed, ddp = train_type == 'ddp')
 
 class SigLIP(CLIP):
     """ Similar to CLIP but with a different loss function."""
@@ -344,11 +318,11 @@ class SigLIP(CLIP):
         self.logit_bias  = nn.Parameter(torch.ones(1) * init_bias)
         self.loss_fn = sigliploss
 
-    def forward(self, image, text):
+    def forward(self, image, text, train_type = 'single', **kwargs):
         image_embed = self.encode_image(image)
         text_embed = self.encode_text(text)
         
-        return self.loss_fn(image_embed, text_embed, self.logit_scale, self.logit_bias)
+        return self.loss_fn(image_embed, text_embed, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp')
     
 class LiT(CLIP):
     """ CLIP but freeze the vision model by default."""

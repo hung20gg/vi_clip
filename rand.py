@@ -32,7 +32,10 @@ def contrastive_loss(g_image_embeds, g_text_embeds, image_embeds, text_embeds):
     loss_img = nn.CrossEntropyLoss()(img_logits, labels)  # image-to-text loss
     loss_txt = nn.CrossEntropyLoss()(text_logits, labels)  # text-to-image loss
     
-    return (loss_img + loss_txt) / 2
+    loss = (loss_img + loss_txt) / 2
+    torch.distributed.all_reduce(loss, op=dist.ReduceOp.AVG)
+    
+    return loss
 
 # Example CLIP model (simplified)
 
@@ -67,6 +70,8 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
                 loss = torch.mean(nll)
             else:
                 loss += torch.mean(nll)
+                
+        torch.distributed.all_reduce(loss, op=dist.ReduceOp.AVG)
         
         return loss 
 
