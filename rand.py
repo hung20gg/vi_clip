@@ -168,7 +168,7 @@ def train(rank, world_size, model, images, texts, all_gather=False, loss_ = 'sig
     with torch.no_grad():
         if loss_ == 'siglip':
             loss = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=all_gather)
-            loss2 = sigliploss(image_embeds, text_embeds, ddp=False, all_gather=not all_gather)
+            loss2 = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=not all_gather)
             print("Loss 2", loss2)
             print("Loss 1", loss)
         else:
