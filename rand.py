@@ -159,38 +159,40 @@ def train(rank, world_size, model, images, texts, all_gather=False, loss_ = 'sig
 
     # # Compute loss using all gathered embeddings
     # loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
-    if loss_ == 'siglip':
-        loss = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=all_gather)
-        loss2 = sigliploss(image_embeds, text_embeds, ddp=False, all_gather=not all_gather)
-        print("Loss 2", loss2)
-        print("Loss 1", loss)
-    else:
-        gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
-        gathered_text_embeds = [torch.zeros_like(text_embeds) for _ in range(world_size)]
-        
-        dist.all_gather(gathered_image_embeds, image_embeds)
-        dist.all_gather(gathered_text_embeds, text_embeds)
+    model.eval()
+    with torch.no_grad():
+        if loss_ == 'siglip':
+            loss = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=all_gather)
+            loss2 = sigliploss(image_embeds, text_embeds, ddp=False, all_gather=not all_gather)
+            print("Loss 2", loss2)
+            print("Loss 1", loss)
+        else:
+            gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
+            gathered_text_embeds = [torch.zeros_like(text_embeds) for _ in range(world_size)]
+            
+            dist.all_gather(gathered_image_embeds, image_embeds)
+            dist.all_gather(gathered_text_embeds, text_embeds)
 
-        # Concatenate the gathered embeddings
-        all_image_embeds = torch.cat(gathered_image_embeds, dim=0)
-        all_text_embeds = torch.cat(gathered_text_embeds, dim=0)
+            # Concatenate the gathered embeddings
+            all_image_embeds = torch.cat(gathered_image_embeds, dim=0)
+            all_text_embeds = torch.cat(gathered_text_embeds, dim=0)
+            
+            print("Rank", dist.get_rank())
+            
+            # all_image_embeds[dist.get_rank()] = image_embeds
+            # all_text_embeds[dist.get_rank()] = text_embeds
+            
+            print(all_image_embeds.shape)
+            loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
         
-        print("Rank", dist.get_rank())
-        
-        # all_image_embeds[dist.get_rank()] = image_embeds
-        # all_text_embeds[dist.get_rank()] = text_embeds
-        
-        print(all_image_embeds.shape)
-        loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
-    
-    loss = loss.sum()
-    print("Total loss", loss)
+    # loss = loss.sum()
+    # print("Total loss", loss)
 
     # Backpropagate and update model
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    # optimizer.zero_grad()
+    # loss.backward()
+    # optimizer.step()
 
     print(f"Rank {rank}, Loss: {loss.item()}")
 
