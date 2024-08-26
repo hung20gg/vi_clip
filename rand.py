@@ -33,7 +33,9 @@ def contrastive_loss(g_image_embeds, g_text_embeds, image_embeds, text_embeds):
 
 # Example CLIP model (simplified)
 
-def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp=False):
+def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp=False, all_gather = True):
+    
+    assert ddp == False and all_gather == True, "All gather can only be used with DDP"
     
     print ("Loss in a single process")
     labels = torch.eye(image_embed.size(0)).to(image_embed.device)
@@ -45,7 +47,7 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
     loss = torch.mean(nll)
     
     print("Loss across processes")
-    if ddp: # DDP
+    if ddp and not all_gather: # DDP go through all processes and get the image embed
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
         # Go through all processes and get the image embed
@@ -69,7 +71,29 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
                 
             else: # Send the image embed to other processes
                 print(f"___________\nRank {rank} is here, shape: {image_embed.shape}", image_embed[:,:10])
+    
+    if ddp and all_gather: # DDP + All gather 
+        world_size = torch.distributed.get_world_size()
+        rank = torch.distributed.get_rank()
+        
+        print(f"World size in forward model: {world_size}")
+        tensor_list = [torch.empty_like(image_embed) for _ in range(world_size)]
+        torch.distributed.all_gather(tensor_list, image_embed)
+        
+        for i in range(world_size):
+            if i != rank:
+                neighbor_image_embed = tensor_list[i]
+                print(f"______________\nRank {rank} received image embed from rank {i}, shape: {neighbor_image_embed.shape}",neighbor_image_embed[:,:10])
                 
+                logits = torch.matmul(neighbor_image_embed, text_embed.t()) * logit_scale + logit_bias
+                
+                loglik = torch.nn.functional.logsigmoid(logits * m1_diag1)
+                nll = - torch.sum(loglik)
+                loss += torch.mean(nll)
+                print('2 neighbors', (image_embed + neighbor_image_embed)[:,:10])
+                
+            else:
+                print(f"___________\nRank {rank} is here, shape: {image_embed.shape}", image_embed[:,:10])
     
     print("Loss", loss)
     return loss
@@ -129,7 +153,7 @@ def train(rank, world_size, model, images, texts):
     # # Compute loss using all gathered embeddings
     # loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
     
-    loss = sigliploss(image_embeds, text_embeds, ddp=True)
+    loss = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=True)
     loss = loss.sum()
     print("Total loss", loss)
 
