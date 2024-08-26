@@ -35,8 +35,9 @@ def contrastive_loss(g_image_embeds, g_text_embeds, image_embeds, text_embeds):
 
 def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp=False, all_gather = True):
     
-    assert ddp == False and all_gather == True, "All gather can only be used with DDP"
-    
+    if ddp == False and all_gather == True:
+        raise ValueError("All gather is only available in DDP mode")
+        
     print ("Loss in a single process")
     labels = torch.eye(image_embed.size(0)).to(image_embed.device)
     logits = torch.matmul(image_embed, text_embed.t()) * logit_scale + logit_bias
