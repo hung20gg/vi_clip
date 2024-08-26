@@ -35,7 +35,7 @@ def contrastive_loss(g_image_embeds, g_text_embeds, image_embeds, text_embeds):
 
 def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp=False):
     
-    
+    print ("Loss in a single process")
     labels = torch.eye(image_embed.size(0)).to(image_embed.device)
     logits = torch.matmul(image_embed, text_embed.t()) * logit_scale + logit_bias
     m1_diag1 = - torch.ones_like(logits) + 2 * labels
@@ -44,6 +44,7 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
     nll = - torch.sum(loglik)
     loss = torch.mean(nll)
     
+    print("Loss across processes")
     if ddp: # DDP
         world_size = torch.distributed.get_world_size()
         rank = torch.distributed.get_rank()
@@ -56,19 +57,21 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
                 # Get image embed from other processes
                 neighbor_image_embed = torch.empty_like(image_embed)
                 torch.distributed.broadcast(neighbor_image_embed, i)
+                print(f"Rank {rank} received image embed from rank {i}, shape: {neighbor_image_embed.shape}")
                 print(neighbor_image_embed[:,:10])
                 
                 logits = torch.matmul(neighbor_image_embed, text_embed.t()) * logit_scale + logit_bias
-                m1_diag1 = - torch.ones_like(logits) + 2 * labels
-                loglik = F.logsigmoid(logits * m1_diag1)
+                
+                loglik = torch.nn.functional.logsigmoid(logits * m1_diag1)
                 nll = - torch.sum(loglik)
                 loss += torch.mean(nll)
                 
             else: # Send the image embed to other processes
-                print(f"Rank {rank} is here")
+                print(f"Rank {rank} is here, shape: {image_embed.shape}")
                 print(image_embed[:,:10])
                 torch.distributed.broadcast(image_embed, i)
     
+    print("Loss", loss)
     return loss
 
 class CLIPModel(nn.Module):
@@ -95,6 +98,7 @@ def train(rank, world_size, model, images, texts):
     texts = texts.to(rank)
 
     # Compute local embeddings
+    print("Rank",rank, "Embedding image and text")
     image_embeds = model.module.encode_image(images)
     text_embeds = model.module.encode_text(texts)
 
@@ -120,6 +124,8 @@ def train(rank, world_size, model, images, texts):
     # loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
     
     loss = sigliploss(image_embeds, text_embeds, ddp=True)
+    loss = loss.sum()
+    print("Total loss", loss)
 
     # Backpropagate and update model
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
