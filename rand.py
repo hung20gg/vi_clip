@@ -57,8 +57,7 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
                 # Get image embed from other processes
                 neighbor_image_embed = torch.empty_like(image_embed)
                 torch.distributed.broadcast(neighbor_image_embed, i)
-                print(f"Rank {rank} received image embed from rank {i}, shape: {neighbor_image_embed.shape}")
-                print(neighbor_image_embed[:,:10])
+                print(f"______________\nRank {rank} received image embed from rank {i}, shape: {neighbor_image_embed.shape}\n",neighbor_image_embed[:,:10])
                 
                 logits = torch.matmul(neighbor_image_embed, text_embed.t()) * logit_scale + logit_bias
                 
@@ -67,8 +66,7 @@ def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp
                 loss += torch.mean(nll)
                 
             else: # Send the image embed to other processes
-                print(f"Rank {rank} is here, shape: {image_embed.shape}")
-                print(image_embed[:,:10])
+                print(f"___________\nRank {rank} is here, shape: {image_embed.shape}",'\n', image_embed[:,:10])
                 torch.distributed.broadcast(image_embed, rank)
     
     print("Loss", loss)
@@ -106,8 +104,7 @@ def train(rank, world_size, model, images, texts):
         image_embeds = image_embeds * 2
         text_embeds = text_embeds * 2
         
-    print("Rank",rank)
-    print(image_embeds[:,:10])
+    print(f"_________\nRank",rank,'\n', image_embeds[:,:10])
 
     # Gather embeddings from all processes (all_gather)
     # gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
