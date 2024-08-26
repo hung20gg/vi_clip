@@ -118,7 +118,7 @@ class CLIPModel(nn.Module):
         return self.text_encoder(texts)
 
 # Training step with DDP and all_gather
-def train(rank, world_size, model, images, texts, all_gather=False):
+def train(rank, world_size, model, images, texts, all_gather=False, loss_ = 'siglip'):
     # DDP setup
     setup_ddp(rank, world_size)
     model.to(rank)
@@ -159,8 +159,27 @@ def train(rank, world_size, model, images, texts, all_gather=False):
 
     # # Compute loss using all gathered embeddings
     # loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
+    if loss_ == 'siglip':
+        loss = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=all_gather)
+    else:
+        gathered_image_embeds = [torch.zeros_like(image_embeds) for _ in range(world_size)]
+        gathered_text_embeds = [torch.zeros_like(text_embeds) for _ in range(world_size)]
+        
+        dist.all_gather(gathered_image_embeds, image_embeds)
+        dist.all_gather(gathered_text_embeds, text_embeds)
+
+        # Concatenate the gathered embeddings
+        all_image_embeds = torch.cat(gathered_image_embeds, dim=0)
+        all_text_embeds = torch.cat(gathered_text_embeds, dim=0)
+        
+        print("Rank", dist.get_rank())
+        
+        # all_image_embeds[dist.get_rank()] = image_embeds
+        # all_text_embeds[dist.get_rank()] = text_embeds
+        
+        print(all_image_embeds.shape)
+        loss = contrastive_loss(all_image_embeds, all_text_embeds, image_embeds, text_embeds)
     
-    loss = sigliploss(image_embeds, text_embeds, ddp=True, all_gather=all_gather)
     loss = loss.sum()
     print("Total loss", loss)
 
@@ -179,8 +198,10 @@ if __name__ == "__main__":
     embed_dim = 256  # Dimension of embeddings
     batch_size_per_node = 8
     all_gather = False
+    type_ = 'siglip'
     
     parser.add_argument('--all_gather', type=bool, default=all_gather, help='All gather embeddings')
+    parser.add_argument('--type', type=str, default=type_, help='Type of loss function')
     args = parser.parse_args()
 
     # Example image and text input tensors (random for demonstration)
@@ -193,6 +214,6 @@ if __name__ == "__main__":
     # Simulate training on each node with multiple processes
     torch.multiprocessing.spawn(
         train,
-        args=(world_size, model, images, texts, args.all_gather),
+        args=(world_size, model, images, texts, args.all_gather, args.type),
         nprocs=world_size,
     )
