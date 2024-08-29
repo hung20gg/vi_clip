@@ -30,7 +30,7 @@ class Trainer:
         if self.is_float16:
             self.model.half()
         
-        self.train_projection = model_args.get('force_text_projection', False)
+        self.train_projection = train_args.get('train_text', False)
         self.text_projection_iters = train_args.get('text_projection_iters', 1000)
         if self.train_projection:
             self.model.setup_training(train_text=False, device=self.device)
@@ -39,8 +39,6 @@ class Trainer:
         
         self.model_name = self.train_type + "_" + model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
         self.model_name = self.model_name.replace('/','-')
-            
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
         
         if self.train_type == 'ddp':
             torch.cuda.set_device(self.device)  # master gpu takes up extra memory
@@ -53,7 +51,25 @@ class Trainer:
            
         elif self.train_type == 'dp':
                 self.model = torch.nn.DataParallel(self.model).to(self.device)
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
+        
+        self.lr = train_args['lr']
+        
+        # Custom lr for text model
+        if 'text' in self.model_args['model_type']:
+            self.projection_lr = train_args.get('text_projection_lr', train_args['lr'])
+            optimizer_params = []
+            for name, param in self.model.named_parameters():
+                if 'text_projection' in name:
+                    optimizer_params.append({'params': param, 'lr': self.projection_lr, 'weight_decay': train_args['weight_decay'], 'betas': (0.9, train_args['beta2'])})
+                
+                # Text model and coef of siglip, clip
+                elif param.requires_grad:
+                    optimizer_params.append({'params': param, 'lr': self.lr, 'weight_decay': train_args['weight_decay'], 'betas': (0.9, train_args['beta2'])})
+            self.optimizer = torch.optim.AdamW(optimizer_params)
+        # Not implement custom lr for full model
+        else:
+            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr = self.train_args['lr'], weight_decay = self.train_args['weight_decay'],betas=(0.9, self.train_args['beta2']))
+        
         self.epochs = self.train_args['epochs']
         self.batch_size = self.train_args['batch_size']
         
@@ -62,6 +78,7 @@ class Trainer:
 
         self.save_dir = self.train_args['save_dir']
         self.evaluate_every = self.train_args['evaluate_every']
+    
         
         if self.train_args['scheduler'] == 'linear':
             self.scheduler = linear_warmup_decay_scheduler(self.optimizer, 
@@ -80,7 +97,6 @@ class Trainer:
             self.scaler = torch.cuda.amp.GradScaler()
             
 
-            
     def load_checkpoint(self, checkpoint):
         self.model.load_checkpoint(checkpoint['model_state_dict'])
         
@@ -113,8 +129,8 @@ class Trainer:
     
     def _unfreeze_text(self):
         self.train_projection = False
-        pass
-    
+        for param in self.model.parameters():
+            param.requires_grad = True
         
     def train(self):
         # Not reporting the loss on WanDB
@@ -139,12 +155,12 @@ class Trainer:
         return losses
     
     def save_checkpoint(self):
-        if not self.model.train_vision:
-            if self.train_projection:
-                self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
-            else:
-                self.model.save_projection_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
-        else:
+        # if not self.model.train_vision:
+        #     if self.train_projection:
+        #         self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
+        #     else:
+        #         self.model.save_projection_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
+        # else:
             self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
     
     def check_save_model(self, loss, min_loss):

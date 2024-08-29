@@ -7,7 +7,7 @@ training_args = {
     'train_type':'single', # 'single', 'ddp' or 'dp'
     'mixed_precision': False,
     'device': 'cuda',
-    'lr': 5e-4,
+    'lr': 1e-4,
     'weight_decay': 1e-3,
     'epochs': 10,
     'batch_size': 2048,
@@ -21,8 +21,11 @@ training_args = {
     'image_folder': 'data/images', # Prefix for image folder (ignore for now)
     'data_type': 'numpy', # 'numpy' or 'images'
     'save_dir': 'checkpoints/text_model_base',
+    'save_text_projection': 'checkpoints/text_projection_base',
+    'text_projection_lr': 5e-4,
     'evaluate_every': 200,
     'text_projection_iters': 1000,
+    'train_text': True,
     'beta2': 0.999 # On siglip, 0.95 is used
 }
 
@@ -33,6 +36,7 @@ model_args = {
     'max_length': 64,
     'model_type': 'siglip', # 'text_siglip' or 'text_clip'
     'pretrain': True,
+    'projection_dim':768,
     'force_text_projection': True
 }
 
