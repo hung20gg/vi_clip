@@ -115,12 +115,12 @@ def download_and_extract_batches(repo_name, local_directory, folder_name = "imag
             cache_dir=local_directory
         )
         
-        print(f"Downloaded {parquet_file} to {local_directory}")
+        print(f"Downloaded {parquet_file} to {images_directory}")
         
         # Test copy
-        shutil.copy(parquet_path, os.path.join(local_directory, 'captions.parquet'))
+        shutil.copy(parquet_path, os.path.join(images_directory, 'captions.parquet'))
         
-        print(f"Copied {parquet_file} to {local_directory}")
+        print(f"Copied {parquet_file} to {images_directory}")
 
     for tar_file in tqdm(tar_files, desc="Downloading and extracting batches"):
         # Create a temporary directory for this batch
@@ -136,10 +136,10 @@ def download_and_extract_batches(repo_name, local_directory, folder_name = "imag
             # Extract the tar file
             if keep_folder:
                 folder_name = tar_file.split('.')[0]
-                images_directory = os.path.join(local_directory, folder_name)
-                os.makedirs(images_directory, exist_ok=True)
+                images_folder = os.path.join(images_directory, folder_name)
+                os.makedirs(images_folder, exist_ok=True)
                 with tarfile.open(tar_path, 'r:gz') as tar:
-                    tar.extractall(path=images_directory)
+                    tar.extractall(path=images_folder)
             else:
                 with tarfile.open(tar_path, 'r:gz') as tar:
                     tar.extractall(path=images_directory)
