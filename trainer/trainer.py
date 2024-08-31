@@ -6,7 +6,9 @@ from .utils import build_model, get_dataloader
 from .scheduler import linear_warmup_decay_scheduler, cosine_warmup_scheduler
 import torch.multiprocessing as mp
 from torch.distributed import init_process_group, destroy_process_group
-
+from huggingface_hub import hf_hub_download, HfApi, login
+import wandb
+wandb.login(key="6e5713d4b110c6bd9de61e9fd3db26e726b2e50b")
 
 class Args:
     def __init__(self, world_size, rank):
@@ -17,7 +19,7 @@ class Trainer:
     def __init__(self, model_args : dict, train_args : dict):
         self.model_args = model_args
         self.train_args = train_args
-        
+         
         self.is_float16 = train_args.get('float16', False)
         self.train_type = train_args['train_type']
         self.mix_precision = train_args.get('mixed_precision', False) and not self.is_float16
@@ -30,7 +32,7 @@ class Trainer:
         if self.is_float16:
             self.model.half()
         
-        self.train_projection = train_args.get('train_text', False)
+        self.train_projection = train_args.get('train_projection_only', False)
         self.text_projection_iters = train_args.get('text_projection_iters', 1000)
         if self.train_projection:
             self.model.setup_training(train_text=False, device=self.device)
@@ -39,6 +41,18 @@ class Trainer:
         
         self.model_name = self.train_type + "_" + model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
         self.model_name = self.model_name.replace('/','-')
+        
+        self.wandb_report = train_args.get('wandb_project', None) is not None
+        if self.wandb_report is not None:
+            wandb.init(project=train_args['wandb_project'],
+                       name=train_args['train_name'] + '_' + self.model_name,)
+        
+        if model_args.get('checkpoint', None) is not None:
+            if ".pt" in model_args['checkpoint']:
+                checkpoint = model_args['checkpoint']
+            else:
+                checkpoint = os.path.join(model_args['checkpoint'] , f'{self.model_name}.pth')
+            self.load_checkpoint(checkpoint)
         
         if self.train_type == 'ddp':
             torch.cuda.set_device(self.device)  # master gpu takes up extra memory
@@ -75,6 +89,12 @@ class Trainer:
         
         self.dataloaders, self.samplers = get_dataloader(train_args, model_args) 
         self.len_dataloader = sum([len(loader) for loader in self.dataloaders])
+        self._train_steps = self.len_dataloader * self.epochs
+        
+        self._predownload = 0
+        if train_args.get('epoch_on_first_dataset', 0) > 0:
+            self._predownload = train_args['epoch_on_first_dataset']
+            self._train_steps += len(self.dataloaders[0]) * self._predownload
 
         self.save_dir = self.train_args['save_dir']
         self.evaluate_every = self.train_args['evaluate_every']
@@ -83,14 +103,14 @@ class Trainer:
         if self.train_args['scheduler'] == 'linear':
             self.scheduler = linear_warmup_decay_scheduler(self.optimizer, 
                                                             self.train_args['warmup_steps'], 
-                                                            self.len_dataloader * self.epochs, 
+                                                            self._train_steps, 
                                                             self.train_args['intial_lr'], 
                                                             self.train_args['peak_lr'])
         
         elif self.train_args['scheduler'] == 'cosine':
             self.scheduler = cosine_warmup_scheduler(self.optimizer, 
                                                     self.train_args['warmup_steps'], 
-                                                    self.len_dataloader * self.epochs, 
+                                                    self._train_steps, 
                                                     self.train_args['intial_lr'])
         
         if self.mix_precision:
@@ -98,7 +118,7 @@ class Trainer:
             
 
     def load_checkpoint(self, checkpoint):
-        self.model.load_checkpoint(checkpoint['model_state_dict'])
+        self.model.load_checkpoint(checkpoint)
         
     def distributed_update(self, sampler, epoch):
         if self.train_type == 'ddp':
@@ -131,6 +151,10 @@ class Trainer:
         self.train_projection = False
         for param in self.model.parameters():
             param.requires_grad = True
+    
+    def report_to_wandb(self, loss):
+        if self.wandb_report:
+            wandb.log({'loss': loss})
         
     def train(self):
         # Not reporting the loss on WanDB
@@ -139,7 +163,9 @@ class Trainer:
         i = 0
         min_loss = 1e9
         for epoch in range(self.epochs):
+            dl = 0
             for dataloader, sampler in zip(self.dataloaders, self.samplers):
+                dl += 1
                 self.distributed_update(sampler, epoch)
                 for images, texts in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i+=1
@@ -152,6 +178,12 @@ class Trainer:
                         self._unfreeze_text()
 
                     losses.append(loss.item())
+                    self.report_to_wandb(loss.item())
+                    
+                # Pre-downloaded dataset for the first few epoch
+                if epoch < self._predownload and dl == 1:
+                    break
+        self.push_to_hf()
         return losses
     
     def save_checkpoint(self):
@@ -161,6 +193,8 @@ class Trainer:
         #     else:
         #         self.model.save_projection_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
         # else:
+            if os.path.exists(self.save_dir) == False:
+                os.makedirs(self.save_dir)
             self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
     
     def check_save_model(self, loss, min_loss):
@@ -173,6 +207,16 @@ class Trainer:
                 
         return min(loss.sum().item(), min_loss)  
     
+    def push_to_hf(self):
+        api = HfApi()
+        api.upload_file(
+            path_or_fileobj=os.path.join(self.save_dir, f'{self.model_name}.pth'),
+            path_in_repo=f'{self.model_name}.pth',
+            repo_id="hung20gg/vi_clip",
+            repo_type="model",
+        )
+        print(f"Model saved to Hugging Face: {self.model_name}")
+    
 class CrossLingualTrainer(Trainer):
     def __init__(self, model_args, train_args):
         super(CrossLingualTrainer, self).__init__(model_args, train_args)
@@ -183,7 +227,9 @@ class CrossLingualTrainer(Trainer):
         min_loss = 1e9
         i = 0
         for epoch in range(self.epochs):
+            dl = 0
             for dataloader, sampler in zip(self.dataloaders, self.samplers):
+                dl += 1
                 self.distributed_update(sampler, epoch)
                 for texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i += 1
@@ -194,8 +240,12 @@ class CrossLingualTrainer(Trainer):
                         min_loss = self.check_save_model(loss, min_loss) 
                             
                     losses.append(loss.sum().item())
-                    
-                    
+                    self.report_to_wandb(loss.item())
+                
+                # Pre-downloaded dataset for the first few epoch
+                if epoch < self._predownload and dl == 1:
+                    break
+        self.push_to_hf()           
         return losses
     
 class mCLIPTrainer(Trainer):
@@ -219,7 +269,8 @@ class mCLIPTrainer(Trainer):
                         min_loss = self.check_save_model(loss, min_loss) 
                             
                     losses.append(loss.sum().item())
-                    
+                    self.report_to_wandb(loss.item())
+        self.push_to_hf()            
         return losses
 
 def ddp_setup(rank: int, world_size: int):
