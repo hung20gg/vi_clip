@@ -144,14 +144,18 @@ class CLIP(nn.Module):
                  **kwargs):
         super(CLIP, self).__init__()
 
+        self.model_type = 'clip'
         self.loss_fn = cliploss
         self.vision_source = vision_source
         self.force_text_projection = force_text_projection
         self.train_text = False
         self.train_vision = False
         self.device = None
+        self.text_model_name = text_model
+        self.vision_model_name = vision_model
         self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.tensor(1/0.07)))
         self.max_length = max_length
+        self.projection_dim = projection_dim
         if is_load:
             self.load_model(vision_model, text_model, pretrain, projection_dim)
             
@@ -182,6 +186,7 @@ class CLIP(nn.Module):
         print(f'Number of vision model parameters: {count_parameters(self.vision_model)}')
         
         print('Loading text model')
+        
         self.text_model = AutoModel.from_pretrained(text_model)
         self.tokenizer = AutoTokenizer.from_pretrained(text_model, use_fast=True)
         print(f'Number of text model parameters: {count_parameters(self.text_model)}')
@@ -228,8 +233,29 @@ class CLIP(nn.Module):
         torch.save(self.state_dict(), path)
         
     def load_text_checkpoint(self, checkpoint):
-        self.text_model.load_state_dict(torch.load(checkpoint))
+        temp_text_model = TextEncoder(text_model = self.text_model_name,
+                                 model_type = self.model_type, 
+                                 projection_dim = self.projection_dim, 
+                                 max_length = self.max_length, 
+                                 force_text_projection = self.force_text_projection)
+        temp_text_model.load_state_dict(torch.load(checkpoint))
         
+        # Load weights to the current model
+        with torch.no_grad():    
+            self.text_model.load_state_dict(temp_text_model.text_model.state_dict())
+            # self.logit_scale.load_state_dict(temp_text_model.logit_scale.state_dict())
+            if self.force_text_projection:
+                self.text_projection.load_state_dict(temp_text_model.text_projection.state_dict())
+            # if "siglip" in self.model_type and hasattr(self, 'logit_bias'):
+            #     self.logit_bias.load_state_dict(temp_text_model.logit_bias.state_dict())
+
+        del temp_text_model
+        gc.collect()
+        try:
+            torch.cuda.empty_cache()
+        except:
+            print('No GPU available')
+
     def save_text_checkpoint(self, path, using_automodel = True):
         if not using_automodel:
             torch.save(self.text_model.state_dict(), os.path.join(path, 'text_model.pth'))
@@ -277,6 +303,7 @@ class CLIP(nn.Module):
     
     def encode_text(self, texts, result = 'mean'):
         
+        
         inputs = self.tokenizer(texts, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
         outputs = self.text_model(**inputs).last_hidden_state
                 
@@ -315,6 +342,7 @@ class SigLIP(CLIP):
                  **kwargs):
         super(SigLIP, self).__init__(**kwargs)
         
+        self.model_type = 'siglip'
         self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
         self.logit_bias  = nn.Parameter(torch.ones(1) * init_bias)
         self.loss_fn = sigliploss
@@ -329,6 +357,7 @@ class LiT(CLIP):
     """ CLIP but freeze the vision model by default."""
     def __init__(self, **kwargs):
         super(LiT, self).__init__(**kwargs)
+        self.model_type = 'lit'
         
     def setup_training(self, train_vision = False, train_text = True, device = None):
         self._setup_device(device)
@@ -338,6 +367,7 @@ class SigLiT(SigLIP):
     """ SigLIP but freeze the vision model by default."""
     def __init__(self, **kwargs):
         super(SigLiT, self).__init__(**kwargs)
+        self.model_type = 'siglit'
         
     def setup_training(self, train_vision = False, train_text = True, device = None):
         self.setup_device(device)

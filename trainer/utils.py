@@ -35,6 +35,11 @@ def build_model(model_args):
         model = BaselineCLIP(**model_args)
     else:
         model = TextEncoder(**model_args)
+        
+    if model_args.get('checkpoint', None) is not None:
+        if ".pt" in model_args['checkpoint']:
+            checkpoint = model_args['checkpoint']
+            model.load_text_checkpoint(checkpoint)
     
     return model
 
@@ -58,6 +63,7 @@ def get_dataloader(train_args, model_args, train = True):
     batch_size = train_args['batch_size']
     num_workers = train_args['num_workers']
     is_ddp = train_args['train_type'] == 'ddp'
+    is_text_seg = 'phobert' in model_args['text_model']
     
     sampler = None
     dataloaders = []
@@ -81,13 +87,13 @@ def get_dataloader(train_args, model_args, train = True):
         # Load the embeddings
         if model_args.get('data_type', 'images') == 'numpy' or train_args.get('data_type', 'images') == 'numpy':
             print("Loading numpy files")
-            dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim)
+            dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim, segment = is_text_seg)
         
         else:
             print("Loading images")
             # Load the images
             if training_objective in ['clip','siglip','lit','siglit', 'text_clip', 'text_siglip']:
-                dataset = ImageCaptionDataset(df, os.path.join(data, 'images'), trim = trim)
+                dataset = ImageCaptionDataset(df, os.path.join(data, 'images'), trim = trim, segment = is_text_seg)
                 # sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
             elif training_objective == 'crosslingual':
                 

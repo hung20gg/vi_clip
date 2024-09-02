@@ -4,9 +4,10 @@ import os
 from torchvision.io import read_image
 import numpy as np
 from PIL import Image
+from pyvi import ViTokenizer
 
 class ImageCaptionDataset(Dataset):
-    def __init__(self, df, directory = '', trim = 0):
+    def __init__(self, df, directory = '', trim = 0, segment = False):
         """Dataset for image captioning
 
         Args:
@@ -18,6 +19,9 @@ class ImageCaptionDataset(Dataset):
         self.images_id = df['image_id'].values
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
+        if segment:
+            self.descriptions = [ViTokenizer.tokenize(desc) for desc in self.descriptions]
+        
         self.trim_pos = trim
         self.is_trim = trim != 0
         
@@ -39,7 +43,7 @@ class ImageCaptionDataset(Dataset):
         return img, label
 
 class TensorCaptionDataset(Dataset):
-    def __init__(self, df, directory = '', type_ = 'numpy', trim = 0):
+    def __init__(self, df, directory = '', type_ = 'numpy', trim = 0, segment = False):
         """Dataset with preprocessed embeddings
 
         Args:
@@ -51,6 +55,8 @@ class TensorCaptionDataset(Dataset):
         self.directory = directory
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
+        if segment:
+            self.descriptions = [ViTokenizer.tokenize(desc) for desc in self.descriptions]
         
         # Embedding type
         self.load_type = type_

@@ -44,8 +44,9 @@ class Trainer:
         
         self.wandb_report = train_args.get('wandb_project', None) is not None
         if self.wandb_report is not None:
+            self.model_name = train_args['train_name'] + '_' + self.model_name
             wandb.init(project=train_args['wandb_project'],
-                       name=train_args['train_name'] + '_' + self.model_name,)
+                       name=self.model_name ,)
         
         if model_args.get('checkpoint', None) is not None:
             if ".pt" in model_args['checkpoint']:
@@ -135,7 +136,9 @@ class Trainer:
             self.scaler.update()
         else:
             loss = self._forward_pass(images, texts_1, texts_2)
-            # loss = loss.sum()
+            if self.train_type != 'single':
+                loss = loss.sum()
+            loss.backward()
             loss.sum().backward()
             self.optimizer.step()
         return loss

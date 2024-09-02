@@ -6,7 +6,7 @@ from tqdm import tqdm
 from PIL import Image
 import os
 from concurrent.futures import ThreadPoolExecutor
-
+from pyvi import ViTokenizer
 from ..trainer import build_model
 
 class TextDataset(Dataset):
@@ -52,7 +52,7 @@ class ImageDataset(Dataset):
         return img, file_name
 
 
-def get_dataset(directory = 'data/evaluate/imagenet'):
+def get_dataset(directory = 'data/evaluate/imagenet', segment = False):
     
     # Not clarify how the data is stored, but we can assume that the data is stored in parquet format
     
@@ -62,6 +62,8 @@ def get_dataset(directory = 'data/evaluate/imagenet'):
             image_text = pd.read_parquet(os.path.join(directory, file))
 
             break
+    if segment:
+        image_text['caption'] = [ViTokenizer.tokenize(desc) for desc in image_text['caption']]
     
     image_text['image_id'] = pd.factorize(image_text['image'])[0]
     image_text['text_id'] = pd.factorize(image_text['caption'])[0]
@@ -200,11 +202,10 @@ class EvaluateModel:
         print("=============Building model=============")
         if isinstance(model_args, dict):
             self.model = build_model(model_args)
-            if model_args.get("checkpoint") is not None:
-                self.model.load_checkpoint(torch.load(model_args['checkpoint']))
         else:
             self.model = model_args
             
+        self.segment = 'phobert' in model_args['text_model']
         if hasattr(self.model, 'setup_training'):
             self.model.setup_training(train_vision=False, train_text=False, device=self.device)
         else:
@@ -214,7 +215,7 @@ class EvaluateModel:
         self.is_embedding = False
         
         print("=============Loading dataset=============")
-        self.dataset = get_dataset(eval_args['dataset'])
+        self.dataset = get_dataset(eval_args['dataset'], segment=self.segment)
         
     def _encode_text(self, texts):
         print("=============Encoding texts=============")
