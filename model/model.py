@@ -98,14 +98,18 @@ class TextEncoder(nn.Module):
         return self.tokenizer(text, max_length=self.max_length, padding=True, truncation=True, return_tensors='pt').to(self.device)
     
     def encode_text(self, text, result = 'mean'):
-        inputs = self.tokenize(text)
-        outputs = self.text_model(**inputs).last_hidden_state
         
-        if result == 'eos':
-            emb_text = outputs
-            emb_text = emb_text[torch.arange(emb_text.shape[0]), torch.where(inputs['input_ids'] == self.tokenizer.eos_token_id)[1]]
+        if isinstance(text, torch.Tensor):
+            emb_text = text.to(self.device)
         else:
-            emb_text = mean_pooling(outputs, inputs['attention_mask'])
+            inputs = self.tokenize(text)
+            outputs = self.text_model(**inputs).last_hidden_state
+            
+            if result == 'eos':
+                emb_text = outputs
+                emb_text = emb_text[torch.arange(emb_text.shape[0]), torch.where(inputs['input_ids'] == self.tokenizer.eos_token_id)[1]]
+            else:
+                emb_text = mean_pooling(outputs, inputs['attention_mask'])
             
         emb_text = self.text_projection(emb_text)
         

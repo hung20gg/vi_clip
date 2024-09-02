@@ -18,7 +18,7 @@ training_args = {
     'warmup_steps': 500,
     'peak_lr': 1,
     'intial_lr': 0.01,
-    'num_workers': 6,
+    'num_workers': 8,
     'epoch_on_first_dataset': 10, # Predownload the dataset for the first epoch
     'dataset': ['data/dfn_20', 'data/image_caption', 'data/sharegpt4v','data/wit'], # Directory of the dataset
     'dataset_trim': [4,4,4,4],
@@ -26,7 +26,7 @@ training_args = {
     'data_type': 'numpy', # 'numpy' or 'images'
     'save_dir': 'checkpoints/text_model_base',
     'save_text_projection': 'checkpoints/text_projection_base',
-    'train_projection_only' : False,
+    'train_projection_only' : True,
     'text_projection_lr': 5e-4,
     'evaluate_every': 200,
     'text_projection_iters': 1000,

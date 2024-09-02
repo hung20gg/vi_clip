@@ -88,7 +88,7 @@ class Trainer:
         self.epochs = self.train_args['epochs']
         self.batch_size = self.train_args['batch_size']
         
-        self.dataloaders, self.samplers = get_dataloader(train_args, model_args) 
+        self.dataloaders, self.samplers = get_dataloader(train_args, model_args, device=self.device) 
         self.len_dataloader = sum([len(loader) for loader in self.dataloaders])
         self._train_steps = self.len_dataloader * self.epochs
         
@@ -219,7 +219,8 @@ class Trainer:
             repo_type="model",
         )
         print(f"Model saved to Hugging Face: {self.model_name}")
-    
+        
+        
 class CrossLingualTrainer(Trainer):
     def __init__(self, model_args, train_args):
         super(CrossLingualTrainer, self).__init__(model_args, train_args)

@@ -2,7 +2,7 @@ from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP, BaselineCLIP
 import os
 import pandas as pd
 from torch.utils.data import DataLoader
-from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset, TensorCaptionDataset
+from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset, TensorCaptionDataset, PreembedDataset
 from torch.utils.data.distributed import DistributedSampler
 
 def build_model(model_args):
@@ -43,7 +43,7 @@ def build_model(model_args):
     
     return model
 
-def get_dataloader(train_args, model_args, train = True): 
+def get_dataloader(train_args, model_args, train = True, device = 'cuda'): 
     # Get lists of dataloader for each dataset
     """
     Create list of dataloaders and samplers for each dataset.
@@ -87,7 +87,11 @@ def get_dataloader(train_args, model_args, train = True):
         # Load the embeddings
         if model_args.get('data_type', 'images') == 'numpy' or train_args.get('data_type', 'images') == 'numpy':
             print("Loading numpy files")
-            dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim, segment = is_text_seg)
+            if train_args.get('train_text', True):
+                dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim, segment = is_text_seg)
+            else:
+                print("Loading pre-embedded text, it might take a while")
+                dataset = PreembedDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim, text_model_name = model_args['text_model'], device = device)
         
         else:
             print("Loading images")

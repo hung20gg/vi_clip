@@ -1,10 +1,14 @@
 from torch.utils.data import DataLoader, Dataset, TensorDataset, BatchSampler
 import torch
+import gc
 import os
 from torchvision.io import read_image
 import numpy as np
 from PIL import Image
 from pyvi import ViTokenizer
+from tqdm import tqdm
+from transformers import AutoTokenizer, AutoModel
+from ..model import mean_pooling
 
 class ImageCaptionDataset(Dataset):
     def __init__(self, df, directory = '', trim = 0, segment = False):
@@ -20,7 +24,7 @@ class ImageCaptionDataset(Dataset):
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
         if segment:
-            self.descriptions = [ViTokenizer.tokenize(desc) for desc in self.descriptions]
+            self.descriptions = [ViTokenizer.tokenize(desc) for desc in tqdm(self.descriptions)]
         
         self.trim_pos = trim
         self.is_trim = trim != 0
@@ -56,7 +60,72 @@ class TensorCaptionDataset(Dataset):
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
         if segment:
-            self.descriptions = [ViTokenizer.tokenize(desc) for desc in self.descriptions]
+            self.descriptions = [ViTokenizer.tokenize(desc) for desc in tqdm(self.descriptions)]
+        
+        # Embedding type
+        self.load_type = type_
+        self.trim_pos = trim
+        self.is_trim = trim != 0
+    
+    def __len__(self):
+        return len(self.imgs)
+        
+    def __getitem__(self, index):
+        img_dir = self.imgs[index]
+        
+        if self.is_trim:
+            folder = img_dir[:self.trim_pos]
+            img_ = img_dir[self.trim_pos:]
+            embed_dir = os.path.join(self.directory, folder, img_)
+        else:
+            embed_dir = os.path.join(self.directory, img_dir)
+        
+        if self.load_type == 'torch':
+            embed_dir = embed_dir.split('.')[0] + '.pt'
+            embed = torch.load(embed_dir)
+        elif self.load_type == 'numpy':
+            embed_dir = embed_dir.split('.')[0] + '.npy'
+            embed = torch.tensor(np.load(embed_dir))
+        else:
+            raise ValueError("Embedding type not supported")
+        
+        return embed, self.descriptions[index]
+    
+class PreembedDataset(Dataset):
+    def __init__(self, df, directory = '', type_ = 'numpy', trim = 0, text_model_name = 'vinai/phobert-base-v2', bs = 2048, device = 'cuda'):
+        """Dataset with preprocessed embeddings
+
+        Args:
+            df (_type_): DataFrame of the dataset
+            directory (_type_): _description_
+        """
+        super(PreembedDataset, self).__init__()
+        # self.df = df
+        self.directory = directory
+        self.imgs = df['image'].values
+        self.captions = df['caption'].values
+        
+        # Segment the text
+        if 'vinai' in text_model_name:
+            self.captions = [ViTokenizer.tokenize(desc) for desc in tqdm(self.captions)]
+            
+        self.descriptions = None
+        tokenizer = AutoTokenizer.from_pretrained(text_model_name)
+        embedding_model = AutoModel.from_pretrained(text_model_name).to(device)
+        for i in tqdm(range(0, len(self.captions), bs), desc="Embedding text"):
+            with torch.no_grad():
+                inputs = tokenizer(self.captions[i:i+bs], return_tensors='pt', padding=True, truncation=True).to(device)
+                embed = embedding_model(**inputs).last_hidden_state
+                embed = mean_pooling(embed, inputs['attention_mask']).detach().cpu()
+
+                if self.descriptions is None:
+                    self.descriptions = embed
+                else:
+                    self.descriptions = torch.cat([self.descriptions, embed], dim=0)
+        
+        del embedding_model
+        gc.collect()
+        torch.cuda.empty_cache()
         
         # Embedding type
         self.load_type = type_
