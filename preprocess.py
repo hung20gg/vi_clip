@@ -94,6 +94,7 @@ def download_and_extract_batches(repo_name, local_directory, folder_name = "imag
     os.makedirs(local_directory, exist_ok=True)
     images_directory = os.path.join(local_directory, folder_name)
     os.makedirs(images_directory, exist_ok=True)
+    print(images_directory)
 
     # Get the list of files in the repository
     files = api.list_repo_files(repo_id=repo_name, repo_type="dataset")
@@ -115,12 +116,12 @@ def download_and_extract_batches(repo_name, local_directory, folder_name = "imag
             cache_dir=local_directory
         )
         
-        print(f"Downloaded {parquet_file} to {images_directory}")
+        print(f"Downloaded {parquet_file} to {local_directory}")
         
         # Test copy
-        shutil.copy(parquet_path, os.path.join(images_directory, 'captions.parquet'))
+        shutil.copy(parquet_path, os.path.join(local_directory, 'captions.parquet'))
         
-        print(f"Copied {parquet_file} to {images_directory}")
+        print(f"Copied {parquet_file} to {local_directory}")
 
     for tar_file in tqdm(tar_files, desc="Downloading and extracting batches"):
         # Create a temporary directory for this batch
