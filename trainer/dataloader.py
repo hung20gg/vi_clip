@@ -92,7 +92,7 @@ class TensorCaptionDataset(Dataset):
         return embed, self.descriptions[index]
     
 class PreembedDataset(Dataset):
-    def __init__(self, df, directory = '', type_ = 'numpy', trim = 0, text_model_name = 'vinai/phobert-base-v2', bs = 2048, device = 'cuda'):
+    def __init__(self, df, directory = '', type_ = 'numpy', trim = 0, text_model_name = 'vinai/phobert-base-v2', bs = 2048, device = 'cuda', max_length = 64):
         """Dataset with preprocessed embeddings
 
         Args:
@@ -114,7 +114,7 @@ class PreembedDataset(Dataset):
         embedding_model = AutoModel.from_pretrained(text_model_name).to(device)
         for i in tqdm(range(0, len(self.captions), bs), desc="Embedding text"):
             with torch.no_grad():
-                inputs = tokenizer(self.captions[i:i+bs], return_tensors='pt', padding=True, truncation=True).to(device)
+                inputs = tokenizer(self.captions[i:i+bs], max_length=max_length, return_tensors='pt', padding=True, truncation=True).to(device)
                 embed = embedding_model(**inputs).last_hidden_state
                 embed = mean_pooling(embed, inputs['attention_mask']).detach().cpu()
 

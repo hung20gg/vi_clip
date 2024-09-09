@@ -4,6 +4,7 @@ from tqdm import tqdm
 
 from .utils import build_model, get_dataloader
 from .scheduler import linear_warmup_decay_scheduler, cosine_warmup_scheduler
+from ..model import count_parameters
 import torch.multiprocessing as mp
 from torch.distributed import init_process_group, destroy_process_group
 from huggingface_hub import hf_hub_download, HfApi, login
@@ -115,11 +116,18 @@ class Trainer:
                                                     self.train_args['intial_lr'])
         
         if self.mix_precision:
-            self.scaler = torch.cuda.amp.GradScaler()
+            self.scaler = torch.GradScaler(self.device)
             
 
     def load_checkpoint(self, checkpoint):
-        self.model.load_checkpoint(checkpoint)
+        checkpoint_type = self.model_args.get('checkpoint_type', self.model_args['model_type'].split('_')[0])
+        
+        # if model weight from huggingface
+        if self.model_args.get('checkpoint_source', 'local') == 'huggingface':
+            hf_hub_download(checkpoint, './')
+            checkpoint = os.path.join('./', checkpoint.split('/')[-1])
+            
+        self.model.load_checkpoint(checkpoint, checkpoint_type)
         
     def distributed_update(self, sampler, epoch):
         if self.train_type == 'ddp':
@@ -128,7 +136,7 @@ class Trainer:
     def _mini_batch_train(self, images=None, texts_1=None, texts_2=None):
         self.optimizer.zero_grad()  
         if self.mix_precision:
-            with torch.autocast(device_type='cuda', dtype=torch.float16):
+            with torch.autocast(device_type=self.device, dtype=torch.float16):
                 loss = self._forward_pass(images, texts_1, texts_2)
                 # loss = loss.sum() # sum() to make it a scalar
             self.scaler.scale(loss).backward()
@@ -139,7 +147,7 @@ class Trainer:
             if self.train_type != 'single':
                 loss = loss.sum()
             loss.backward()
-            loss.sum().backward()
+
             self.optimizer.step()
         return loss
                 
@@ -160,7 +168,10 @@ class Trainer:
             wandb.log({'loss': loss})
         
     def train(self):
-        # Not reporting the loss on WanDB
+        
+        print(f"Model name: {self.model_name}")
+        print(f"Number of parameters: {count_parameters(self.model)}")
+        
         self.model.train()
         losses = []
         i = 0

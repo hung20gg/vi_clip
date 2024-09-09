@@ -40,6 +40,8 @@ model_args = {
     'vision_model': 'vit_base_patch16_siglip_224',
     'clip_model': 'google/siglip-base-patch16-224',
     'checkpoint': None,
+    'checkpoint_type': 'prj', # 'text' or 'prj'
+    'checkpoint_source': 'local', # 'local' or 'huggingface'
     'max_length': 64,
     'model_type': 'siglip', # 'text_siglip' or 'text_clip'
     'pretrain': True,
