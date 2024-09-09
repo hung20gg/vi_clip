@@ -172,10 +172,18 @@ class Trainer:
                 self.distributed_update(sampler, epoch)
                 for images, texts in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
                     i+=1
+                    
+                    bs = images.shape[0]
                     loss = self._mini_batch_train(images = images, texts_1=texts)
+                    
                     self.scheduler.step()
-                    if i % self.evaluate_every == 0:
-                        self.check_save_model(loss, min_loss)
+                    
+                    if self.train_args.get('save_stragegy', 'loss') == 'loss':
+                        if i % self.evaluate_every == 0:
+                            min_loss = self.check_save_model(loss, min_loss, bs)
+                    else:
+                        if i % self.evaluate_every == 0:
+                            self.save_checkpoint()
                     
                     if self.train_projection and i > self.text_projection_iters:
                         self._unfreeze_text()
@@ -200,15 +208,15 @@ class Trainer:
                 os.makedirs(self.save_dir)
             self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
     
-    def check_save_model(self, loss, min_loss):
-        if loss.item() < min_loss:
+    def check_save_model(self, loss, min_loss, bs):
+        if loss.item()/bs < min_loss:
             if self.train_type == 'ddp':
                 if self.gpu_id == 0:
                     self.save_checkpoint()
             else:
                 self.save_checkpoint()
                 
-        return min(loss.sum().item(), min_loss)  
+        return min(loss.sum().item()/bs, min_loss)  
     
     def push_to_hf(self):
         api = HfApi()
