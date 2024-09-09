@@ -9,6 +9,54 @@ from collections.abc import Iterable
 import gc
 import os
 
+class ProjectionHead(nn.Module):
+    def __init__(self,  
+                 projection_dim, 
+                 model_type = 'prj_siglip', 
+                 init_scale = 10, 
+                 init_bias = -10,
+                 **kwargs):
+        
+        super(ProjectionHead, self).__init__()
+        self.text_projection = nn.Linear(768, projection_dim)
+        
+        if model_type in ['prj_clip', 'prj_lit']:
+            self.loss_fn = cliploss
+            self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.tensor(1/0.07)))
+            self.loss_type = 'softmax'
+            
+        else:
+            self.loss_fn = sigliploss
+            self.logit_scale = nn.Parameter(torch.ones(1) * torch.log(torch.ones(1)* init_scale))
+            self.logit_bias  = nn.Parameter(torch.ones(1) * init_bias)
+            self.loss_type = 'sigmoid'
+            
+    def setup_training(self, device, **kwargs):
+        self.device = device
+        self.to(self.device)
+    
+    def load_checkpoint(self, checkpoint, type_='prj'):
+        if type_ == 'prj':
+            self.load_state_dict(torch.load(checkpoint))
+        raise ValueError('Invalid model type')
+        
+    def save_checkpoint(self, path):
+        torch.save(self.state_dict(), path)
+        
+    def forward(self, images, texts, train_type = 'single', **kwargs):
+        texts = torch.tensor(texts).to(self.device)
+        images = torch.tensor(images).to(self.device)
+        
+        texts = self.text_projection(texts)
+        
+        # Normalize
+        texts = texts / (torch.norm(texts, dim=1, keepdim=True) + 1e-8)
+        images = images / (torch.norm(images, dim=1, keepdim=True) + 1e-8)
+                
+        if self.loss_type == 'sigmoid':
+            return self.loss_fn(images, texts, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp', **kwargs)
+        else:
+            return self.loss_fn(images, texts, temperature= self.logit_scale , ddp = train_type == 'ddp', **kwargs)
 
 class TextEncoder(nn.Module):
     """
@@ -72,9 +120,21 @@ class TextEncoder(nn.Module):
      
     # ========================   
     # Saving and loading checkpoints    
-    def load_checkpoint(self, checkpoint):
-        self.load_state_dict(torch.load(checkpoint))
-        
+    def load_checkpoint(self, checkpoint, type_='text'):
+        if type_ == 'text':
+            self.load_state_dict(torch.load(checkpoint))
+        elif type_ == 'prj':
+            projection = ProjectionHead(768, model_type = f'prj_{self.model_type.split("_")[1]}')
+            projection.load_checkpoint(checkpoint)
+            
+            with torch.no_grad():
+                self.text_projection.load_state_dict(projection.text_projection.state_dict())
+            del projection
+            gc.collect()
+            torch.cuda.empty_cache()
+        else:
+            raise ValueError('Invalid model type')
+            
     def save_checkpoint(self, path):
         torch.save(self.state_dict(), path)
         

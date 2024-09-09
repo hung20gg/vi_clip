@@ -39,9 +39,9 @@ if __name__ == '__main__':
     model2 = DummyModel()
     optimizer = torch.optim.AdamW(model.parameters(), lr = 0.001)
     print(model.linear.parameters())
-    scheduler = cosine_warmup_scheduler(optimizer, 5, 10, 1)
+    scheduler = cosine_warmup_scheduler(optimizer, 5, 100, 1)
     print(optimizer.param_groups)
-    for i in range(10):
+    for i in range(100):
         optimizer.zero_grad()
         print(scheduler.get_lr())
         optimizer.step()

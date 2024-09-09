@@ -1,4 +1,4 @@
-from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP, BaselineCLIP, TextEncoder
+from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP, BaselineCLIP, TextEncoder, ProjectionHead
 import os
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -33,8 +33,10 @@ def build_model(model_args):
         model = mCLIP(**model_args)
     elif model_type.lower() == 'baseline':
         model = BaselineCLIP(**model_args)
-    else:
+    elif 'text' in model_type.lower():
         model = TextEncoder(**model_args)
+    else:
+        model = ProjectionHead(**model_args)
         
     if model_args.get('checkpoint', None) is not None:
         if ".pt" in model_args['checkpoint']:
