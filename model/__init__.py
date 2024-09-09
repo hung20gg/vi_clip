@@ -1,4 +1,4 @@
-from .model import CLIP, SigLIP, LiT, SigLiT, TextEncoder
+from .model import CLIP, SigLIP, LiT, SigLiT, TextEncoder, ProjectionHead
 from .lossfn import sigliploss, cliploss
 from .utils import mean_pooling, count_parameters
 from .crosslingual import CrossLingual, mCLIP
