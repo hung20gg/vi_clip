@@ -9,6 +9,18 @@ from pyvi import ViTokenizer
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 from ..model import mean_pooling
+from joblib import Parallel, delayed
+
+
+def segment_vi_text(text):
+    return ViTokenizer.tokenize(text)
+
+def parallel_apply(data, func, n_jobs=-1):
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(func)(text) for text in data
+    )
+    return results
+
 
 class ImageCaptionDataset(Dataset):
     def __init__(self, df, directory = '', trim = 0, segment = False):
@@ -24,7 +36,7 @@ class ImageCaptionDataset(Dataset):
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
         if segment:
-            self.descriptions = [ViTokenizer.tokenize(desc) for desc in tqdm(self.descriptions)]
+            self.descriptions = parallel_apply(self.descriptions, segment_vi_text)
         
         self.trim_pos = trim
         self.is_trim = trim != 0
@@ -60,7 +72,7 @@ class TensorCaptionDataset(Dataset):
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
         if segment:
-            self.descriptions = [ViTokenizer.tokenize(desc) for desc in tqdm(self.descriptions)]
+            self.descriptions = parallel_apply(self.descriptions, segment_vi_text)
         
         # Embedding type
         self.load_type = type_
@@ -91,6 +103,8 @@ class TensorCaptionDataset(Dataset):
         
         return embed, self.descriptions[index]
     
+
+    
 class PreembedDataset(Dataset):
     def __init__(self, df, directory = '', type_ = 'numpy', trim = 0, text_model_name = 'vinai/phobert-base-v2', bs = 2048, device = 'cuda', max_length = 64):
         """Dataset with preprocessed embeddings
@@ -107,14 +121,14 @@ class PreembedDataset(Dataset):
         
         # Segment the text
         if 'vinai' in text_model_name:
-            self.captions = [ViTokenizer.tokenize(desc) for desc in tqdm(self.captions)]
+            self.captions = parallel_apply(self.captions, segment_vi_text)
             
         self.descriptions = None
         tokenizer = AutoTokenizer.from_pretrained(text_model_name)
         embedding_model = AutoModel.from_pretrained(text_model_name).to(device)
         for i in tqdm(range(0, len(self.captions), bs), desc="Embedding text"):
             with torch.no_grad():
-                inputs = tokenizer(self.captions[i:i+bs], max_length=max_length, return_tensors='pt', padding=True, truncation=True).to(device)
+                inputs = tokenizer(list(self.captions[i:i+bs]), max_length=max_length, return_tensors='pt', padding=True, truncation=True).to(device)
                 embed = embedding_model(**inputs).last_hidden_state
                 embed = mean_pooling(embed, inputs['attention_mask']).detach().cpu()
 
