@@ -292,8 +292,18 @@ class CLIP(nn.Module):
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.to(self.device)
     
-    def load_checkpoint(self, checkpoint):
-        self.load_state_dict(torch.load(checkpoint))
+    def load_checkpoint(self, checkpoint, checkpoint_type = 'text'):
+        if checkpoint_type == 'text':
+            self.load_text_checkpoint(checkpoint)
+            
+        elif checkpoint_type == 'prj':
+            if hasattr(self, 'text_projection'):
+                self.text_projection.load_state_dict(torch.load(checkpoint))
+            else:
+                raise ValueError('No projection layer')
+            
+        else:
+            self.load_state_dict(torch.load(checkpoint))
         
     def save_checkpoint(self, path):
         torch.save(self.state_dict(), path)
