@@ -41,7 +41,7 @@ def build_model(model_args):
     if model_args.get('checkpoint', None) is not None:
         if ".pt" in model_args['checkpoint']:
             checkpoint = model_args['checkpoint']
-            model.load_text_checkpoint(checkpoint)
+            model.load_checkpoint(checkpoint, model_args['checkpoint_type'])
     
     return model
 
@@ -89,7 +89,7 @@ def get_dataloader(train_args, model_args, train = True, device = 'cuda'):
         # Load the embeddings
         if model_args.get('data_type', 'images') == 'numpy' or train_args.get('data_type', 'images') == 'numpy':
             print("Loading numpy files")
-            if train_args.get('train_text', True):
+            if model_args.get('model_type', "text_siglip").split('_')[0] == 'text':
                 dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim, segment = is_text_seg)
             else:
                 print("Loading pre-embedded text, it might take a while")

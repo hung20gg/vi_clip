@@ -49,13 +49,6 @@ class Trainer:
             wandb.init(project=train_args['wandb_project'],
                        name=self.model_name ,)
         
-        if model_args.get('checkpoint', None) is not None:
-            if ".pt" in model_args['checkpoint']:
-                checkpoint = model_args['checkpoint']
-            else:
-                checkpoint = os.path.join(model_args['checkpoint'] , f'{self.model_name}.pth')
-            self.load_checkpoint(checkpoint)
-        
         if self.train_type == 'ddp':
             torch.cuda.set_device(self.device)  # master gpu takes up extra memory
             torch.cuda.empty_cache()
@@ -119,15 +112,6 @@ class Trainer:
             self.scaler = torch.GradScaler(self.device)
             
 
-    def load_checkpoint(self, checkpoint):
-        checkpoint_type = self.model_args.get('checkpoint_type', self.model_args['model_type'].split('_')[0])
-        
-        # if model weight from huggingface
-        if self.model_args.get('checkpoint_source', 'local') == 'huggingface':
-            hf_hub_download(checkpoint, './')
-            checkpoint = os.path.join('./', checkpoint.split('/')[-1])
-            
-        self.model.load_checkpoint(checkpoint, checkpoint_type)
         
     def distributed_update(self, sampler, epoch):
         if self.train_type == 'ddp':

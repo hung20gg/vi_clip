@@ -37,8 +37,9 @@ class ProjectionHead(nn.Module):
     
     def load_checkpoint(self, checkpoint, type_='prj'):
         if type_ == 'prj':
-            self.load_state_dict(torch.load(checkpoint))
-        raise ValueError('Invalid model type')
+            self.load_state_dict(torch.load(checkpoint, weights_only = True))
+        else:
+            raise ValueError('Invalid model type')
         
     def save_checkpoint(self, path):
         torch.save(self.state_dict(), path)
@@ -121,6 +122,7 @@ class TextEncoder(nn.Module):
     # ========================   
     # Saving and loading checkpoints    
     def load_checkpoint(self, checkpoint, type_='text'):
+        print("Checkpoint:", type_)
         if type_ == 'text':
             self.load_state_dict(torch.load(checkpoint))
         elif type_ == 'prj':
