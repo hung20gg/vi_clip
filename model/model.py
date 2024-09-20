@@ -182,7 +182,7 @@ class TextEncoder(nn.Module):
         # texts: y_pred, images: y_train
         
         texts = self.encode_text(texts)
-        images = torch.tensor(images).to(self.device)
+        images = torch.tensor(images, requires_grad=True).to(self.device)
                 
         if self.loss_type == 'sigmoid':
             return self.loss_fn(images, texts, self.logit_scale, self.logit_bias, ddp = train_type == 'ddp', **kwargs)

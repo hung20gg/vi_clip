@@ -79,7 +79,7 @@ def sigliploss_broadcast(image_embed, text_embed, logit_scale = 1.0, logit_bias 
         torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.AVG)
     return loss
 
-def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp = False, all_gather = False, all_gather_implement = 'disco', require_gard = False):
+def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp = False, all_gather = True, all_gather_implement = 'disco', require_gard = False):
     
     if not ddp and all_gather == True:
         raise ValueError("All gather can only be used with DDP")

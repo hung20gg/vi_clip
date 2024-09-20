@@ -178,7 +178,7 @@ class Trainer:
                             min_loss = self.check_save_model(loss, min_loss, bs)
                     else:
                         if i % self.evaluate_every == 0:
-                            self.save_checkpoint()
+                            min_loss = self.check_save_model(loss, 1e9, bs)
                     
                     if self.train_projection and i > self.text_projection_iters:
                         self._unfreeze_text()
@@ -193,21 +193,23 @@ class Trainer:
         return losses
     
     def save_checkpoint(self):
-        # if not self.model.train_vision:
-        #     if self.train_projection:
-        #         self.model.save_text_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
-        #     else:
-        #         self.model.save_projection_checkpoint(os.path.join(self.save_dir, f'text_{self.model_name}'))
-        # else:
-            if os.path.exists(self.save_dir) == False:
-                os.makedirs(self.save_dir)
-            self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
-    
+        if os.path.exists(self.save_dir) == False:
+            os.makedirs(self.save_dir)
+        self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
+
+    def ddp_save_checkpoint(self):
+        if os.path.exists(self.save_dir) == False:
+            os.makedirs(self.save_dir)
+        if self.device == 0:
+            model_path = os.path.join(self.save_dir, f'{self.model_name}.pth')
+            ckpt = self.model.module.state_dict()
+            torch.save(ckpt, model_path)
+
     def check_save_model(self, loss, min_loss, bs):
         if loss.item()/bs < min_loss:
             if self.train_type == 'ddp':
-                if self.gpu_id == 0:
-                    self.save_checkpoint()
+                if self.device == 0:
+                    self.ddp_save_checkpoint()
             else:
                 self.save_checkpoint()
                 
