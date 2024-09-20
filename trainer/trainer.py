@@ -54,6 +54,7 @@ class Trainer:
             torch.cuda.empty_cache()
             self.args = Args(world_size = train_args['world_size'], rank = self.device)
             
+            self.model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, 
                                                                    device_ids = [self.device], 
                                                                    find_unused_parameters=True)

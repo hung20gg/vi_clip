@@ -81,8 +81,7 @@ def sigliploss_broadcast(image_embed, text_embed, logit_scale = 1.0, logit_bias 
 
 def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp = False, all_gather = True, all_gather_implement = 'disco', require_gard = False):
     
-    if not ddp and all_gather == True:
-        raise ValueError("All gather can only be used with DDP")
+    all_gather = all_gather and ddp
     
     if all_gather:
         return sigliploss_allgather(image_embed, text_embed, logit_scale = logit_scale, logit_bias = logit_bias, all_gather_implement = all_gather_implement, require_grad = require_gard)
