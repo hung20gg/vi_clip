@@ -151,9 +151,9 @@ class Trainer:
         for param in self.model.parameters():
             param.requires_grad = True
     
-    def report_to_wandb(self, loss):
+    def report_to_wandb(self, **kwargs):
         if self.wandb_report:
-            wandb.log({'loss': loss})
+            wandb.log(kwargs)
         
     def train(self):
         
@@ -178,36 +178,36 @@ class Trainer:
                 losses.append(loss.item())
                 
                 if i % self.train_args['log_every'] == 0:
-                    self.report_to_wandb(loss.item())
+                    self.report_to_wandb({'train/loss': loss.item(), 'step': i, 'lr': self.scheduler.get_last_lr()[0]})
                     print(f'Step {epoch + 1}, Loss: {loss.item():.4f}')
                 
                 if i % self.evaluate_every == 0:
                     print(f"Evaluating at iteration {i}...")
-                    min_loss = self.check_save_model(loss, min_loss, bs)
+                    min_loss = self.check_save_model(loss, min_loss, bs, step=i)
 
         self.push_to_hf()
         return losses
     
-    def save_checkpoint(self):
+    def save_checkpoint(self, step=None):
         if os.path.exists(self.save_dir) == False:
             os.makedirs(self.save_dir)
-        self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}.pth'))
+        self.model.save_checkpoint(os.path.join(self.save_dir, f'{self.model_name}_{step}.pth') if step is not None else os.path.join(self.save_dir, f'{self.model_name}.pth'))
 
-    def ddp_save_checkpoint(self):
+    def ddp_save_checkpoint(self, step=None):
         if os.path.exists(self.save_dir) == False:
             os.makedirs(self.save_dir)
         if self.device == 0:
-            model_path = os.path.join(self.save_dir, f'{self.model_name}.pth')
+            model_path = os.path.join(self.save_dir, f'{self.model_name}_{step}.pth') if step is not None else os.path.join(self.save_dir, f'{self.model_name}.pth')
             ckpt = self.model.module.state_dict()
             torch.save(ckpt, model_path)
 
-    def check_save_model(self, loss, min_loss, bs):
+    def check_save_model(self, loss, min_loss, bs, step=None):
         if loss.item()/bs < min_loss:
             if self.train_type == 'ddp':
                 if self.device == 0:
-                    self.ddp_save_checkpoint()
+                    self.ddp_save_checkpoint(step)
             else:
-                self.save_checkpoint()
+                self.save_checkpoint(step)
                 
         return min(loss.item(), min_loss)  
     

@@ -11,7 +11,7 @@ training_args = {
     'mixed_precision': False,
     'device': 'cuda',
     'lr': 1e-4,
-    'weight_decay': 1e-3,
+    'weight_decay': 1e-7,
     'epochs': 1,
     'batch_size': 4096,
     'scheduler': 'cosine', # 'cosine' or 'linear'
@@ -26,11 +26,10 @@ training_args = {
     'save_text_projection': 'checkpoints/text_projection_base',
     'train_projection_only' : False,
     'text_projection_lr': 1e-3,
-    'evaluate_every': 200,
     'text_projection_iters': 1000,
     'train_text': True,
     'accelerate': False,
-    'evaluate_every': 500,
+    'evaluate_every': 1000,
     'log_every': 20,
     'beta2': 0.95 # On siglip, 0.95 is used. Else, 0.999
     
