@@ -4,46 +4,46 @@
     
 """
 training_args = {
-    'train_name':'test',
-    'wandb_project':'test vi_clip',
+    'train_name':'prj',
+    'wandb_project':'cv_final',
     
     'train_type':'single', # 'single', 'ddp' or 'dp'
     'mixed_precision': False,
     'device': 'cuda',
     'lr': 1e-4,
     'weight_decay': 1e-3,
-    'epochs': 10,
-    'batch_size': 2048,
+    'epochs': 1,
+    'batch_size': 4096,
     'scheduler': 'cosine', # 'cosine' or 'linear'
     'warmup_steps': 500,
     'peak_lr': 1,
-    'intial_lr': 0.01,
-    'num_workers': 8,
-    'epoch_on_first_dataset': 10, # Predownload the dataset for the first epoch
-    'dataset': ['data/dfn_20', 'data/image_caption', 'data/sharegpt4v','data/wit'], # Directory of the dataset
-    'dataset_trim': [4,4,4,4],
-    'image_folder': 'data/images', # Prefix for image folder (ignore for now)
+    'initial_lr': 0.01,
+    'num_workers': 16,
+    'dataset': ['../data/2M5_cc3m_siglip_B224', '../data/cc12m-siglip-b224'], # Directory of the dataset
+    'dataset_trim': 4,
     'data_type': 'numpy', # 'numpy' or 'images'
     'save_dir': 'checkpoints/text_model_base',
     'save_text_projection': 'checkpoints/text_projection_base',
-    'train_projection_only' : True,
-    'text_projection_lr': 5e-4,
+    'train_projection_only' : False,
+    'text_projection_lr': 1e-3,
     'evaluate_every': 200,
     'text_projection_iters': 1000,
     'train_text': True,
-    'beta2': 0.999 # On siglip, 0.95 is used
+    'accelerate': False,
+    'evaluate_every': 500,
+    'log_every': 20,
+    'beta2': 0.95 # On siglip, 0.95 is used. Else, 0.999
     
 }
 
 model_args = {
     'text_model': 'vinai/phobert-base-v2',
     'vision_model': 'vit_base_patch16_siglip_224',
-    'clip_model': 'google/siglip-base-patch16-224',
     'checkpoint': None,
     'checkpoint_type': 'prj', # 'text' or 'prj'
     'checkpoint_source': 'local', # 'local' or 'huggingface'
     'max_length': 64,
-    'model_type': 'siglip', # 'text_siglip' or 'text_clip'
+    'model_type': 'text_siglip', # 'text_siglip' or 'text_clip'
     'pretrain': True,
     'projection_dim':768,
     'force_text_projection': True
@@ -58,6 +58,8 @@ eval_args = {
 
 def parse_to_train_model_eval_args(args):
     training_args = {
+        'train_name': args.train_name,
+        'wandb_project': args.wandb_project,
         'train_type': args.train_type,
         'mixed_precision': args.mixed_precision,
         'device': args.device,
@@ -68,13 +70,15 @@ def parse_to_train_model_eval_args(args):
         'scheduler': args.scheduler,
         'warmup_steps': args.warmup_steps,
         'peak_lr': args.peak_lr,
-        'intial_lr': args.intial_lr,
+        'initial_lr': args.initial_lr,
         'num_workers': args.num_workers,
         'dataset': args.dataset,
-        'image_folder': args.image_folder,
         'save_dir': args.save_dir,
-        'evaluate_every': 200,
-        'beta2': args.beta2
+        'evaluate_every': args.evaluate_every,
+        'beta2': args.beta2,
+        'data_type': args.data_type,
+        'train_projection_only': args.train_projection_only,
+        'log_every': args.log_every
     }
 
     model_args = {

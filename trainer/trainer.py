@@ -2,14 +2,20 @@ import torch
 import os
 from tqdm import tqdm
 
-from .utils import build_model, get_dataloader
-from .scheduler import linear_warmup_decay_scheduler, cosine_warmup_scheduler
-from ..model import count_parameters
 import torch.multiprocessing as mp
 from torch.distributed import init_process_group, destroy_process_group
 from huggingface_hub import hf_hub_download, HfApi, login
 import wandb
-wandb.login(key="6e5713d4b110c6bd9de61e9fd3db26e726b2e50b")
+import dotenv
+dotenv.load_dotenv()
+
+
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from .utils import build_model, get_dataloader
+from .scheduler import linear_warmup_decay_scheduler, cosine_warmup_scheduler
+from model import count_parameters
 
 class Args:
     def __init__(self, world_size, rank):
@@ -33,11 +39,14 @@ class Trainer:
         if self.is_float16:
             self.model.half()
         
+        print("Model built successfully.")
         self.train_projection = train_args.get('train_projection_only', False)
         self.text_projection_iters = train_args.get('text_projection_iters', 1000)
-        if self.train_projection:
+        if self.train_projection or self.text_projection_iters > 0:
+            print("Freezing text encoder parameters...")
             self.model.setup_training(train_text=False, device=self.device)
         else:
+            print("Training all text model parameters...")
             self.model.setup_training(device=self.device)
         
         self.model_name = self.train_type + "_" + model_args['model_type'] + '_' + model_args['text_model'] + '_' + model_args['vision_model']
@@ -45,9 +54,9 @@ class Trainer:
         
         self.wandb_report = train_args.get('wandb_project', None) is not None
         if self.wandb_report is not None:
+            wandb.login(key=os.getenv("WANDB_API_KEY"))
             self.model_name = train_args['train_name'] + '_' + self.model_name
-            wandb.init(project=train_args['wandb_project'],
-                       name=self.model_name ,)
+            wandb.init(name=self.model_name, project=train_args['wandb_project'])
         
         if self.train_type == 'ddp':
             torch.cuda.set_device(self.device)  # master gpu takes up extra memory
@@ -83,15 +92,9 @@ class Trainer:
         self.epochs = self.train_args['epochs']
         self.batch_size = self.train_args['batch_size']
         
-        self.dataloaders, self.samplers = get_dataloader(train_args, model_args, device=self.device) 
-        self.len_dataloader = sum([len(loader) for loader in self.dataloaders])
-        self._train_steps = self.len_dataloader * self.epochs
-        
-        self._predownload = 0
-        if train_args.get('epoch_on_first_dataset', 0) > 0:
-            self._predownload = train_args['epoch_on_first_dataset']
-            self._train_steps += len(self.dataloaders[0]) * self._predownload
-
+        self.dataloader, self.sampler = get_dataloader(train_args, model_args, device=self.device) 
+        self._train_steps = len(self.dataloader) * self.epochs
+                
         self.save_dir = self.train_args['save_dir']
         self.evaluate_every = self.train_args['evaluate_every']
     
@@ -100,14 +103,14 @@ class Trainer:
             self.scheduler = linear_warmup_decay_scheduler(self.optimizer, 
                                                             self.train_args['warmup_steps'], 
                                                             self._train_steps, 
-                                                            self.train_args['intial_lr'], 
+                                                            self.train_args['initial_lr'], 
                                                             self.train_args['peak_lr'])
         
         elif self.train_args['scheduler'] == 'cosine':
             self.scheduler = cosine_warmup_scheduler(self.optimizer, 
                                                     self.train_args['warmup_steps'], 
                                                     self._train_steps, 
-                                                    self.train_args['intial_lr'])
+                                                    self.train_args['initial_lr'])
         
         if self.mix_precision:
             self.scaler = torch.GradScaler(self.device)
@@ -162,34 +165,26 @@ class Trainer:
         i = 0
         min_loss = 1e9
         for epoch in range(self.epochs):
-            dl = 0
-            for dataloader, sampler in zip(self.dataloaders, self.samplers):
-                dl += 1
-                self.distributed_update(sampler, epoch)
-                for images, texts in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
-                    i+=1
-                    
-                    bs = images.shape[0]
-                    loss = self._mini_batch_train(images = images, texts_1=texts)
-                    
-                    self.scheduler.step()
-                    
-                    if self.train_args.get('save_stragegy', 'loss') == 'loss':
-                        if i % self.evaluate_every == 0:
-                            min_loss = self.check_save_model(loss, min_loss, bs)
-                    else:
-                        if i % self.evaluate_every == 0:
-                            min_loss = self.check_save_model(loss, 1e9, bs)
-                    
-                    if self.train_projection and i > self.text_projection_iters:
-                        self._unfreeze_text()
-
-                    losses.append(loss.item())
+            self.distributed_update(self.sampler, epoch)
+            for images, texts in tqdm(self.dataloader, desc = f'Epoch {epoch + 1}'):
+                i+=1
+                if not self.train_projection and i > self.text_projection_iters:
+                    self._unfreeze_text()
+                
+                bs = images.shape[0]
+                loss = self._mini_batch_train(images = images, texts_1=texts)
+                
+                self.scheduler.step()
+                losses.append(loss.item())
+                
+                if i % self.train_args['log_every'] == 0:
                     self.report_to_wandb(loss.item())
-                    
-                # Pre-downloaded dataset for the first few epoch
-                if epoch < self._predownload and dl == 1:
-                    break
+                    print(f'Step {epoch + 1}, Loss: {loss.item():.4f}')
+                
+                if i % self.evaluate_every == 0:
+                    print(f"Evaluating at iteration {i}...")
+                    min_loss = self.check_save_model(loss, min_loss, bs)
+
         self.push_to_hf()
         return losses
     
@@ -214,74 +209,18 @@ class Trainer:
             else:
                 self.save_checkpoint()
                 
-        return min(loss.sum().item()/bs, min_loss)  
+        return min(loss.item(), min_loss)  
     
     def push_to_hf(self):
         api = HfApi()
         api.upload_file(
             path_or_fileobj=os.path.join(self.save_dir, f'{self.model_name}.pth'),
             path_in_repo=f'{self.model_name}.pth',
-            repo_id="hung20gg/vi_clip",
+            repo_id="hung20gg/vi_clip_v2",
             repo_type="model",
         )
         print(f"Model saved to Hugging Face: {self.model_name}")
         
-        
-class CrossLingualTrainer(Trainer):
-    def __init__(self, model_args, train_args):
-        super(CrossLingualTrainer, self).__init__(model_args, train_args)
-        
-    def train(self):
-        self.model.train()
-        losses = []
-        min_loss = 1e9
-        i = 0
-        for epoch in range(self.epochs):
-            dl = 0
-            for dataloader, sampler in zip(self.dataloaders, self.samplers):
-                dl += 1
-                self.distributed_update(sampler, epoch)
-                for texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
-                    i += 1
-                    loss = self._mini_batch_train(texts_1 = texts_1, texts_2 = texts_2)
-                    self.scheduler.step()
-                    
-                    if i % self.evaluate_every == 0:
-                        min_loss = self.check_save_model(loss, min_loss) 
-                            
-                    losses.append(loss.sum().item())
-                    self.report_to_wandb(loss.item())
-                
-                # Pre-downloaded dataset for the first few epoch
-                if epoch < self._predownload and dl == 1:
-                    break
-        self.push_to_hf()           
-        return losses
-    
-class mCLIPTrainer(Trainer):
-    def __init__(self, model_args, train_args):
-        super(mCLIPTrainer, self).__init__(model_args, train_args)
-        
-    def train(self):
-        self.model.train()
-        losses = []
-        min_loss = 1e9
-        i = 0
-        for epoch in range(self.epochs):
-            for dataloader, sampler in zip(self.dataloaders, self.samplers):
-                self.distributed_update(sampler, epoch)
-                for images, texts_1, texts_2 in tqdm(dataloader, desc = f'Epoch {epoch + 1}'):
-                    i += 1
-                    loss = self._mini_batch_train(images = images, texts_1 = texts_1, texts_2 = texts_2)
-                    self.scheduler.step()
-                    
-                    if i % self.evaluate_every == 0:
-                        min_loss = self.check_save_model(loss, min_loss) 
-                            
-                    losses.append(loss.sum().item())
-                    self.report_to_wandb(loss.item())
-        self.push_to_hf()            
-        return losses
 
 def ddp_setup(rank: int, world_size: int):
     os.environ["MASTER_ADDR"] = "localhost"
@@ -300,12 +239,7 @@ def main_ddp(
 
         train_args['train_type'] = 'ddp'
         train_args['device'] = rank
-        if model_args['model_type'] == 'crosslingual':
-            trainer = CrossLingualTrainer(model_args, train_args)
-        elif model_args['model_type'] == 'mclip':
-            trainer = mCLIPTrainer(model_args, train_args)
-        else:
-            trainer = Trainer(model_args, train_args)
+        trainer = Trainer(model_args, train_args)
             
         losses = trainer.train()
 

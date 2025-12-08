@@ -7,7 +7,10 @@ from PIL import Image
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pyvi import ViTokenizer
-from ..trainer import build_model
+
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from trainer import build_model
 
 class TextDataset(Dataset):
     def __init__(self, texts):

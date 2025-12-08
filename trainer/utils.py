@@ -1,9 +1,13 @@
-from ..model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP, BaselineCLIP, TextEncoder, ProjectionHead
 import os
 import pandas as pd
 from torch.utils.data import DataLoader
-from .dataloader import ImageCaptionDataset, CLIPSampler, CrossLingualDataset, mCLIPDataset, TensorCaptionDataset, PreembedDataset
 from torch.utils.data.distributed import DistributedSampler
+
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from .dataloader import ImageCaptionDataset, CLIPSampler, TensorCaptionDataset, PreembedDataset
+from model import CLIP, SigLIP, LiT, SigLiT, CrossLingual, mCLIP, BaselineCLIP, TextEncoder, ProjectionHead
 
 def build_model(model_args):
     """Build model based on the model_args
@@ -27,10 +31,6 @@ def build_model(model_args):
         model = LiT(**model_args)
     elif model_type.lower() == 'siglit':
         model = SigLiT(**model_args)
-    elif model_type.lower() == 'crosslingual':
-        model = CrossLingual(**model_args)
-    elif model_type.lower() == 'mclip':
-        model = mCLIP(**model_args)
     elif model_type.lower() == 'baseline':
         model = BaselineCLIP(**model_args)
     elif 'text' in model_type.lower():
@@ -59,64 +59,67 @@ def get_dataloader(train_args, model_args, train = True, device = 'cuda'):
         list[(Dataloader, Sampler)]: Return list of dataloader and sampler for each dataset.
             If the training is not distributed, the sampler will be None.
     """
-    trim_pos = train_args.get('dataset_trim', 0)
+    trim_pos = 4
     datasets = train_args['dataset']
     training_objective = model_args['model_type']
     batch_size = train_args['batch_size']
     num_workers = train_args['num_workers']
     is_ddp = train_args['train_type'] == 'ddp'
-    is_text_seg = 'phobert' in model_args['text_model']
     
     sampler = None
-    dataloaders = []
-    samplers = []
+
     
     if isinstance(datasets, str):
         datasets = [datasets]
-    if isinstance(trim_pos, int):
-        trim_pos = [trim_pos] * len(datasets)
         
-    assert len(datasets) == len(trim_pos), "Length of dataset and trim_pos should be the same"
     
-    for data, trim in zip(datasets, trim_pos):
+    dfs = []
+    for directory in datasets:
         df = None
+
+        print(f"Loading dataset from {directory}")
         
-        for file in os.listdir(data):
+        
+        for file in os.listdir(directory):
+            
             if file.endswith('.parquet'):
-                df = pd.read_parquet(os.path.join(data, file))
+                print(file)
+                df = pd.read_parquet(os.path.join(directory, file))
+                break
         assert df is not None, "No parquet file found in the directory"
         
-        # Load the embeddings
-        if model_args.get('data_type', 'images') == 'numpy' or train_args.get('data_type', 'images') == 'numpy':
-            print("Loading numpy files")
-            if model_args.get('model_type', "text_siglip").split('_')[0] == 'text':
-                dataset = TensorCaptionDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim, segment = is_text_seg)
-            else:
-                print("Loading pre-embedded text, it might take a while")
-                dataset = PreembedDataset(df, os.path.join(data, 'numpy'), type_ = 'numpy', trim = trim, text_model_name = model_args['text_model'], device = device)
+        if train_args.get('data_type', 'images') == 'numpy':
+            directory = os.path.join(directory, 'numpy')
         
-        else:
-            print("Loading images")
-            # Load the images
-            if training_objective in ['clip','siglip','lit','siglit', 'text_clip', 'text_siglip']:
-                dataset = ImageCaptionDataset(df, os.path.join(data, 'images'), trim = trim, segment = is_text_seg)
-                # sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
-            elif training_objective == 'crosslingual':
-                
-                dataset = CrossLingualDataset(df)
-            else:
-                dataset = mCLIPDataset(df, os.path.join(data, 'images'))
-        
-        if is_ddp:
-            # from torch.utils.data.distributed import DistributedSampler
-            sampler = DistributedSampler(dataset)
-            
-        if train:
-            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = not is_ddp, sampler=sampler, num_workers = num_workers)
-        else:
-            dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False, num_workers = num_workers)
-        
-        dataloaders.append(dataloader)
-        samplers.append(sampler)
+        df['directory'] = directory
+        dfs.append(df)
 
-    return dataloaders, samplers
+    df = pd.concat(dfs)
+
+        # Load the embeddings
+    if train_args.get('data_type', 'images') == 'numpy':
+        print("Loading numpy files")
+        if model_args.get('model_type', "text_siglip").split('_')[0] == 'text':
+            dataset = TensorCaptionDataset(df,  type_ = 'numpy', trim = trim_pos)
+        else:
+            print("Loading pre-embedded text, it might take a while")
+            dataset = PreembedDataset(df,  type_ = 'numpy', trim = trim_pos, text_model_name = model_args['text_model'], device = device)
+        print("Done loading numpy files")
+
+    else:
+        print("Loading images")
+        # Load the images
+        if training_objective in ['clip','siglip','lit','siglit', 'text_clip', 'text_siglip']:
+            dataset = ImageCaptionDataset(df, trim = trim_pos)
+            # sampler = CLIPSampler(duplicate_id = 0, batch_size = batch_size)
+    
+    if is_ddp:
+        # from torch.utils.data.distributed import DistributedSampler
+        sampler = DistributedSampler(dataset)
+        
+    if train:
+        dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = not is_ddp, sampler=sampler, num_workers = num_workers)
+    else:
+        dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = False, num_workers = num_workers)
+    
+    return dataloader, sampler

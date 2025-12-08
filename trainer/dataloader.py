@@ -1,15 +1,19 @@
-from torch.utils.data import DataLoader, Dataset, TensorDataset, BatchSampler
+from torch.utils.data import Dataset, BatchSampler
 import torch
 import gc
 import os
-from torchvision.io import read_image
 import numpy as np
 from PIL import Image
 from pyvi import ViTokenizer
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
-from ..model import mean_pooling
 from joblib import Parallel, delayed
+import time
+
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from model import mean_pooling
+
 
 
 def segment_vi_text(text):
@@ -23,7 +27,7 @@ def parallel_apply(data, func, n_jobs=-1):
 
 
 class ImageCaptionDataset(Dataset):
-    def __init__(self, df, directory = '', trim = 0, segment = False):
+    def __init__(self, df, trim = 0):
         """Dataset for image captioning
 
         Args:
@@ -35,31 +39,28 @@ class ImageCaptionDataset(Dataset):
         self.images_id = df['image_id'].values
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
-        if segment:
-            self.descriptions = parallel_apply(self.descriptions, segment_vi_text)
-        
+        self.directory = df['directory'].values
+
         self.trim_pos = trim
         self.is_trim = trim != 0
-        
-        self.directory = directory
-        self.descriptions = []
         
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, idx):
         img_dir = self.imgs[idx]
+        directory = self.directory[idx]
         if self.is_trim:
             folder = img_dir[:self.trim_pos]
             img_ = img_dir[self.trim_pos:]
-            img = Image.open(os.path.join(self.directory, folder, img_))
+            img = Image.open(os.path.join(directory, folder, img_))
         else:
-            img = Image.open(os.path.join(self.directory, img_dir))
+            img = Image.open(os.path.join(directory, img_dir))
         label = self.descriptions[idx]
         return img, label
 
 class TensorCaptionDataset(Dataset):
-    def __init__(self, df, directory = '', type_ = 'numpy', trim = 0, segment = False):
+    def __init__(self, df, type_ = 'numpy', trim = 0):
         """Dataset with preprocessed embeddings
 
         Args:
@@ -68,11 +69,9 @@ class TensorCaptionDataset(Dataset):
         """
         super(TensorCaptionDataset, self).__init__()
         # self.df = df
-        self.directory = directory
+        self.directory = df['directory'].values
         self.imgs = df['image'].values
         self.descriptions = df['caption'].values
-        if segment:
-            self.descriptions = parallel_apply(self.descriptions, segment_vi_text)
         
         # Embedding type
         self.load_type = type_
@@ -84,29 +83,36 @@ class TensorCaptionDataset(Dataset):
         
     def __getitem__(self, index):
         img_dir = self.imgs[index]
+        directory = self.directory[index]
         
-        if self.is_trim:
+        if self.is_trim and '/' not in img_dir:
             folder = img_dir[:self.trim_pos]
             img_ = img_dir[self.trim_pos:]
-            embed_dir = os.path.join(self.directory, folder, img_)
+
+            embed_dir = os.path.join(directory, folder, img_)
+            
         else:
-            embed_dir = os.path.join(self.directory, img_dir)
+            embed_dir = os.path.join(directory, img_dir)
         
-        if self.load_type == 'torch':
-            embed_dir = embed_dir.split('.')[0] + '.pt'
-            embed = torch.load(embed_dir)
-        elif self.load_type == 'numpy':
-            embed_dir = embed_dir.split('.')[0] + '.npy'
-            embed = torch.tensor(np.load(embed_dir))
-        else:
-            raise ValueError("Embedding type not supported")
+        try:
+            if self.load_type == 'torch':
+                embed_dir = embed_dir.rsplit('.', 1)[0] + '.pt'
+                embed = torch.load(embed_dir).squeeze()
+            elif self.load_type == 'numpy':
+                embed_dir = embed_dir.rsplit('.', 1)[0] + '.npy'
+                embed = torch.tensor(np.load(embed_dir)).squeeze()
+            else:
+                raise ValueError("Embedding type not supported")
+        except Exception as e:
+            print(f"Error loading embedding from {embed_dir}: {e}")
+            raise e
         
         return embed, self.descriptions[index]
     
 
     
 class PreembedDataset(Dataset):
-    def __init__(self, df, directory = '', type_ = 'numpy', trim = 0, text_model_name = 'vinai/phobert-base-v2', bs = 2048, device = 'cuda', max_length = 64):
+    def __init__(self, df, type_ = 'numpy', trim = 0, text_model_name = 'vinai/phobert-base-v2', bs = 2048, device = 'cuda', max_length = 64):
         """Dataset with preprocessed embeddings
 
         Args:
@@ -115,14 +121,10 @@ class PreembedDataset(Dataset):
         """
         super(PreembedDataset, self).__init__()
         # self.df = df
-        self.directory = directory
+        self.directory = df['directory'].values
         self.imgs = df['image'].values
         self.captions = df['caption'].values
         
-        # Segment the text
-        if 'vinai' in text_model_name:
-            self.captions = parallel_apply(self.captions, segment_vi_text)
-            
         self.descriptions = None
         tokenizer = AutoTokenizer.from_pretrained(text_model_name)
         embedding_model = AutoModel.from_pretrained(text_model_name).to(device)
@@ -170,50 +172,6 @@ class PreembedDataset(Dataset):
         
         return embed, self.descriptions[index]
 
-class CrossLingualDataset(Dataset):
-    def __init__(self, df ):
-        """_summary_
-
-        Args:
-            df (_type_): DataFrame of the dataset
-            directory (_type_): _description_
-        """
-        super(CrossLingualDataset, self).__init__()
-        self.original_text = df['en'].values
-        self.translated_text = df['vi'].values
-
-    def __len__(self):
-        return len(self.original_text)
-    
-    def __getitem__(self, idx):
-        return self.original_text[idx], self.translated_text[idx]
-    
-
-class mCLIPDataset(Dataset):
-    def __init__(self, df , directory = ''):
-        """_summary_
-
-        Args:
-            df (_type_): DataFrame of the dataset
-            directory (_type_): _description_
-        """
-        super(mCLIPDataset, self).__init__()
-        
-        self.directory = directory
-        self.images_id = df['image_id'].values
-        self.imgs = df['image'].values
-        self.original_text = df['text'].values
-        self.translated_text = df['translated_text'].values
-        assert len(self.original_text) == len(self.translated_text), "Original and translated text must have the same length"
-
-    def __len__(self):
-        return len(self.original_text)
-    
-    def __getitem__(self, idx):
-        img_dir = self.imgs[idx]
-        img = Image.open(os.path.join(self.directory, 'images', img_dir))
-        return img, self.original_text[idx], self.translated_text[idx]
-    
 class CLIPSampler(BatchSampler):
     """_summary_
 

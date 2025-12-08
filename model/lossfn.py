@@ -22,7 +22,7 @@ def sigliploss_allgather(image_embed, text_embed, logit_scale = 1.0, logit_bias 
         else:
             tensor_list = all_gather_default(image_embed, train=True)
     
-    loss = None
+    loss = 0.0
     
     for i in range(world_size):
         if not require_grad:
@@ -36,13 +36,9 @@ def sigliploss_allgather(image_embed, text_embed, logit_scale = 1.0, logit_bias 
         m1_diag1 = - torch.ones_like(logits) + 2 * labels * (1 if i == rank else 0)
         loglik = torch.nn.functional.logsigmoid(logits * m1_diag1)
         
-        nll = - torch.sum(loglik)
-        if loss is None:
-            loss = torch.mean(nll)
-        else:
-            loss += torch.mean(nll)
+        nll = - torch.sum(loglik) / neighbor_image_embed.size(0)
+        loss += nll
     
-    torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.AVG)
     return loss
 
 
@@ -79,12 +75,12 @@ def sigliploss_broadcast(image_embed, text_embed, logit_scale = 1.0, logit_bias 
         torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.AVG)
     return loss
 
-def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp = False, all_gather = True, all_gather_implement = 'disco', require_gard = False):
+def sigliploss(image_embed, text_embed, logit_scale = 1.0, logit_bias = 0.0, ddp = False, all_gather = True, all_gather_implement = 'disco', require_grad = False):
     
     all_gather = all_gather and ddp
     
     if all_gather:
-        return sigliploss_allgather(image_embed, text_embed, logit_scale = logit_scale, logit_bias = logit_bias, all_gather_implement = all_gather_implement, require_grad = require_gard)
+        return sigliploss_allgather(image_embed, text_embed, logit_scale = logit_scale, logit_bias = logit_bias, all_gather_implement = all_gather_implement, require_grad = require_grad)
     else:
         return sigliploss_broadcast(image_embed, text_embed, logit_scale = logit_scale, logit_bias = logit_bias, ddp = ddp)
     
