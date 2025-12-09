@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('--train_projection_only', type=bool, default=training_args.get('train_projection_only'), help='Evaluate every n iterations')
     parser.add_argument('--evaluate_every', type=int, default=training_args.get('evaluate_every', 200), help='Evaluate every n iterations')
     parser.add_argument('--log_every', type=int, default=training_args.get('log_every', 20), help='Trim dataset for debugging')
+    parser.add_argument('--hf_repo_name', type=str, default=training_args.get('hf_repo_name', None), help='Hugging Face repository name')
 
     # Model arguments
     parser.add_argument('--text_model', type=str, default=model_args.get('text_model'), help='Text encoder model')

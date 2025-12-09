@@ -12,8 +12,8 @@ training_args = {
     'device': 'cuda',
     'lr': 1e-4,
     'weight_decay': 1e-7,
-    'epochs': 1,
-    'batch_size': 4096,
+    'epochs': 10,
+    'batch_size': 2304,
     'scheduler': 'cosine', # 'cosine' or 'linear'
     'warmup_steps': 500,
     'peak_lr': 1,
@@ -31,6 +31,7 @@ training_args = {
     'accelerate': False,
     'evaluate_every': 1000,
     'log_every': 20,
+    'hf_repo_name': 'hung20gg/vi_clip_v2',
     'beta2': 0.95 # On siglip, 0.95 is used. Else, 0.999
     
 }
@@ -39,7 +40,7 @@ model_args = {
     'text_model': 'vinai/phobert-base-v2',
     'vision_model': 'vit_base_patch16_siglip_224',
     'checkpoint': None,
-    'checkpoint_type': 'prj', # 'text' or 'prj'
+    'checkpoint_type': 'text', # 'text' or 'prj'
     'checkpoint_source': 'local', # 'local' or 'huggingface'
     'max_length': 64,
     'model_type': 'text_siglip', # 'text_siglip' or 'text_clip'
@@ -77,7 +78,8 @@ def parse_to_train_model_eval_args(args):
         'beta2': args.beta2,
         'data_type': args.data_type,
         'train_projection_only': args.train_projection_only,
-        'log_every': args.log_every
+        'log_every': args.log_every,
+        'hf_repo_name': args.hf_repo_name,
     }
 
     model_args = {

@@ -16,6 +16,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from .utils import build_model, get_dataloader
 from .scheduler import linear_warmup_decay_scheduler, cosine_warmup_scheduler
 from model import count_parameters
+import threading
 
 class Args:
     def __init__(self, world_size, rank):
@@ -184,8 +185,9 @@ class Trainer:
                 if i % self.evaluate_every == 0:
                     print(f"Evaluating at iteration {i}...")
                     min_loss = self.check_save_model(loss, min_loss, bs, step=i)
+                    # Push to HF in a separate thread to avoid blocking training
+                    threading.Thread(target=self.push_to_hf, kwargs={'step': i}, daemon=True).start()
 
-        self.push_to_hf()
         return losses
     
     def save_checkpoint(self, step=None):
@@ -211,15 +213,15 @@ class Trainer:
                 
         return min(loss.item(), min_loss)  
     
-    def push_to_hf(self):
+    def push_to_hf(self, step=None):
         api = HfApi()
         api.upload_file(
-            path_or_fileobj=os.path.join(self.save_dir, f'{self.model_name}.pth'),
-            path_in_repo=f'{self.model_name}.pth',
-            repo_id="hung20gg/vi_clip_v2",
+            path_or_fileobj=os.path.join(self.save_dir, f'{self.model_name}_{step}.pth') if step is not None else os.path.join(self.save_dir, f'{self.model_name}.pth'),
+            path_in_repo=f'{self.model_name}_{step}.pth' if step is not None else f'{self.model_name}.pth',
+            repo_id=self.train_args['hf_repo_name'],
             repo_type="model",
         )
-        print(f"Model saved to Hugging Face: {self.model_name}")
+        print(f"Model saved to Hugging Face at {self.train_args['hf_repo_name']}")
         
 
 def ddp_setup(rank: int, world_size: int):

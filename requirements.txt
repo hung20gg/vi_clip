@@ -1,0 +1,9 @@
+torch
+torchvision
+transformers
+datasets
+huggingface_hub
+pandas
+numpy
+pyarrow
+wandb

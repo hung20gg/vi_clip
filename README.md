@@ -88,3 +88,15 @@ The parquet file should be like this
 | 000001 | name.jpg| 005| giám đốc |
 
 
+Download:
+
+```bash
+cd utils
+python download.py
+```
+
+train
+
+```bash
+python train.py
+```
