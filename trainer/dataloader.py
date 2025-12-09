@@ -4,7 +4,6 @@ import gc
 import os
 import numpy as np
 from PIL import Image
-from pyvi import ViTokenizer
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 from joblib import Parallel, delayed
@@ -13,11 +12,6 @@ import time
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from model import mean_pooling
-
-
-
-def segment_vi_text(text):
-    return ViTokenizer.tokenize(text)
 
 def parallel_apply(data, func, n_jobs=-1):
     results = Parallel(n_jobs=n_jobs)(

@@ -1,9 +1,11 @@
 torch
 torchvision
-transformers
+transformers==4.56.2
 datasets
 huggingface_hub
 pandas
 numpy
 pyarrow
 wandb
+timm
+dotenv

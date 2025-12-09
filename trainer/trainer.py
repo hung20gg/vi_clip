@@ -152,9 +152,9 @@ class Trainer:
         for param in self.model.parameters():
             param.requires_grad = True
     
-    def report_to_wandb(self, **kwargs):
+    def report_to_wandb(self, logs: dict):
         if self.wandb_report:
-            wandb.log(kwargs)
+            wandb.log(logs)
         
     def train(self):
         
