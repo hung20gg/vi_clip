@@ -4,7 +4,7 @@
     
 """
 training_args = {
-    'train_name':'prj',
+    'train_name':'siglip',
     'wandb_project':'cv_final',
     
     'train_type':'single', # 'single', 'ddp' or 'dp'
@@ -19,13 +19,13 @@ training_args = {
     'peak_lr': 1,
     'initial_lr': 0.01,
     'num_workers': 16,
-    'dataset': ['../data/2M5_cc3m_siglip_B224', '../data/cc12m-siglip-b224'], # Directory of the dataset
+    'dataset': ['../data/cc3m-siglip-b224', '../data/cc12m-siglip-b224'], # Directory of the dataset
     'dataset_trim': 4,
     'data_type': 'numpy', # 'numpy' or 'images'
     'save_dir': 'checkpoints/text_model_base',
     'save_text_projection': 'checkpoints/text_projection_base',
     'train_projection_only' : False,
-    'text_projection_lr': 1e-3,
+    'text_projection_lr': 2e-4,
     'text_projection_iters': 1000,
     'train_text': True,
     'accelerate': False,
