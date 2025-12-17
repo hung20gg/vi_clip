@@ -99,14 +99,14 @@ def download_and_extract_batches(repo_name, local_directory, folder_name = "imag
 
 # Usage example
 if __name__ == '__main__':
-    repo_name = "hung20gg/cc3m-siglip-b224"
-    local_directory = "../../data/cc3m-siglip-b224"
+    repo_name = "hung20gg/cc3m-clip-b224"
+    local_directory = "../../data/cc3m-clip-b224"
     folder_name = "numpy"
 
     download_and_extract_batches(repo_name, local_directory, folder_name=folder_name, keep_folder=True)
 
-    repo_name = "hung20gg/cc12m_siglip_b224"
-    local_directory = "../../data/cc12m-siglip-b224"
+    repo_name = "hung20gg/cc12m_clip_b224"
+    local_directory = "../../data/cc12m-clip-b224"
     folder_name = "numpy"
 
     download_and_extract_batches(repo_name, local_directory, folder_name=folder_name, keep_folder=True)

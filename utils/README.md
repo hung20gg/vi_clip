@@ -22,3 +22,6 @@ python embed_image.py --dataset_root ../../data/cc12m-raw --output_root ../../da
 ```
 python embed_image.py --model vit_base_patch16_clip_224.dfn2b --dataset_root ../../data/cc12m-raw --output_root ../../data/cc12m-clip-b224 --batch_size 512 --folder_start 0 --folder_end 950 --num_workers 8
 ```
+
+
+python embed_image.py --dataset_root ../../../data/images --output_root ../../../data/cc3m-clip-b224 --model vit_base_patch16_clip_224.dfn2b --batch_size 256 --folder_start 0 --folder_end 33 --num_workers 8

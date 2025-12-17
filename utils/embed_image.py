@@ -20,7 +20,7 @@ model_args = {
     'text_model': 'vinai/phobert-base-v2',
     'vision_model': 'vit_base_patch16_clip_224.dfn2b', #vit_base_patch16_clip_224.dfn2b, vit_base_patch16_siglip_224
     'max_length': 64,
-    'model_type': 'siglip', # 'text_siglip' or 'text_clip'
+    'model_type': 'clip', # 'text_siglip' or 'text_clip'
     'pretrain': True,
     'projection_dim':768,
     'force_text_projection': False

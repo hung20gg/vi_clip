@@ -180,7 +180,7 @@ class Trainer:
                 
                 if i % self.train_args['log_every'] == 0:
                     self.report_to_wandb({'train/loss': loss.item(), 'step': i, 'lr': self.scheduler.get_last_lr()[0]})
-                    print(f'Step {epoch + 1}, Loss: {loss.item():.4f}')
+                    print(f'Step {i}, Loss: {loss.item():.4f}')
                 
                 if i % self.evaluate_every == 0:
                     print(f"Evaluating at iteration {i}...")

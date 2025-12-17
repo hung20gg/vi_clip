@@ -4,7 +4,7 @@
     
 """
 training_args = {
-    'train_name':'siglip',
+    'train_name':'clip',
     'wandb_project':'cv_final',
     
     'train_type':'single', # 'single', 'ddp' or 'dp'
@@ -19,7 +19,7 @@ training_args = {
     'peak_lr': 1,
     'initial_lr': 0.01,
     'num_workers': 16,
-    'dataset': ['../data/cc3m-siglip-b224', '../data/cc12m-siglip-b224'], # Directory of the dataset
+    'dataset': ['../data/cc3m-clip-b224', '../data/cc12m-clip-b224'], # Directory of the dataset
     'dataset_trim': 4,
     'data_type': 'numpy', # 'numpy' or 'images'
     'save_dir': 'checkpoints/text_model_base',
@@ -32,18 +32,18 @@ training_args = {
     'evaluate_every': 1000,
     'log_every': 20,
     'hf_repo_name': 'hung20gg/vi_clip_v2',
-    'beta2': 0.95 # On siglip, 0.95 is used. Else, 0.999
+    'beta2': 0.999 # On siglip, 0.95 is used. Else, 0.999
     
 }
 
 model_args = {
     'text_model': 'vinai/phobert-base-v2',
-    'vision_model': 'vit_base_patch16_siglip_224',
+    'vision_model': 'vit_base_patch16_clip_224.dfn2b',
     'checkpoint': None,
     'checkpoint_type': 'text', # 'text' or 'prj'
     'checkpoint_source': 'local', # 'local' or 'huggingface'
     'max_length': 64,
-    'model_type': 'text_siglip', # 'text_siglip' or 'text_clip'
+    'model_type': 'text_clip', # 'text_siglip' or 'text_clip'
     'pretrain': True,
     'projection_dim':768,
     'force_text_projection': True

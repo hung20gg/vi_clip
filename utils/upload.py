@@ -54,7 +54,7 @@ def tar_batch_and_push_to_huggingface(local_directory, repo_name, type_ = 'image
 
 # Usage example
 if __name__ == '__main__':
-    repo_name = "hung20gg/cc12m_clip_b224"
-    local_directory = "../../data/cc12m-clip-b224/numpy"
+    repo_name = "hung20gg/cc3m-clip-b224"
+    local_directory = "../../../data/cc3m-clip-b224/numpy"
 
-    tar_batch_and_push_to_huggingface(local_directory=local_directory, repo_name=repo_name, type_='folder', skip=-1)
+    tar_batch_and_push_to_huggingface(local_directory=local_directory, repo_name=repo_name, type_='folder', skip=24)
