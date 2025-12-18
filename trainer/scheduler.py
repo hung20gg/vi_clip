@@ -13,7 +13,7 @@ def linear_warmup_decay_scheduler(optimizer, warmup_steps, total_steps, initial_
     
     return LambdaLR(optimizer, lr_lambda)
 
-def cosine_warmup_scheduler(optimizer, warmup_steps, total_steps, lr, eta_min = 0):
+def cosine_warmup_scheduler(optimizer, warmup_steps, total_steps, lr, eta_min = 1e-6):
     def lr_lambda(current_step):
         if current_step < warmup_steps:
             # Linear warmup
