@@ -111,7 +111,7 @@ class Trainer:
             self.scheduler = cosine_warmup_scheduler(self.optimizer, 
                                                     self.train_args['warmup_steps'], 
                                                     self._train_steps, 
-                                                    self.train_args['initial_lr'])
+                                                    self.train_args['peak_lr'])
         
         if self.mix_precision:
             self.scaler = torch.GradScaler(self.device)
